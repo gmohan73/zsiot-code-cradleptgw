@@ -10,44 +10,14 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/app_logging.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="935">
-              <caret line="58" column="17" selection-start-line="58" selection-start-column="17" selection-end-line="58" selection-end-column="17" />
-            </state>
-          </provider>
-        </entry>
-      </file>
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/zenspace_iot_gateway.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="272">
-              <caret line="226" lean-forward="true" selection-start-line="226" selection-end-line="226" />
+            <state relative-caret-position="384">
+              <caret line="640" lean-forward="true" selection-start-line="640" selection-end-line="640" />
               <folding>
                 <element signature="e#0#10#0" expanded="true" />
               </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/cs.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1173">
-              <caret line="73" column="26" selection-start-line="73" selection-start-column="26" selection-end-line="73" selection-end-column="26" />
-              <folding>
-                <element signature="e#416#427#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/settings.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="17">
-              <caret line="1" column="77" selection-start-line="1" selection-start-column="9" selection-end-line="1" selection-end-column="77" />
             </state>
           </provider>
         </entry>
@@ -63,36 +33,36 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>curren</find>
-      <find>sensor_status</find>
-      <find>setI</find>
-      <find>settings</find>
-      <find>devicestatus</find>
-      <find>Time Out</find>
-      <find>return 20</find>
-      <find>on_connect</find>
-      <find>TimeOut</find>
-      <find>$iothub/twin/GET/#</find>
-      <find>$iothub/twin/GET/</find>
-      <find>sensor_status_publish</find>
-      <find>inform_pod_state</find>
-      <find>doorLock</find>
-      <find>verifyAuth</find>
-      <find>generate</find>
-      <find>print</find>
-      <find>sdk</find>
-      <find>set_state_color</find>
-      <find>update_pod_state</find>
-      <find>do_POST</find>
-      <find>message processing</find>
+      <find>POST</find>
+      <find>lockstate</find>
+      <find>messages/events</find>
+      <find>curtime</find>
+      <find>lockTime</find>
+      <find>lock_door</find>
+      <find>device</find>
+      <find>device_list</find>
       <find>do_GET</find>
-      <find>Light</find>
-      <find>Reserved in Next 10 min</find>
-      <find>Available in Next 10 min</find>
-      <find>Lightsensor</find>
-      <find>Reservation In Use</find>
+      <find>doorLock</find>
+      <find>devicestatus</find>
+      <find>LightDoorstate</find>
+      <find>update_pod_state</find>
+      <find>setTimeout</find>
+      <find>Admin In Use</find>
+      <find>sensor_status</find>
+      <find>101</find>
+      <find>inform_pod_State</find>
       <find>on_message</find>
-      <find>devicestatustemp</find>
+      <find>publish</find>
+      <find>pod_state</find>
+      <find>on_connect</find>
+      <find>pod_status</find>
+      <find>datetime</find>
+      <find>getAuthentication</find>
+      <find>datetime.datetime.now().date()</find>
+      <find>verifyAuth</find>
+      <find>sensor_Status</find>
+      <find>DEVICE_TIMER</find>
+      <find>gateway_Status</find>
     </findStrings>
     <replaceStrings>
       <replace>url+iot_ip</replace>
@@ -111,13 +81,13 @@
         <option value="$PROJECT_DIR$/../demo/zenspace_hub_settings/zenspace_hub_settings.py" />
         <option value="$PROJECT_DIR$/test1.py" />
         <option value="$PROJECT_DIR$/../zenspace_hub_settings/zenspace_hub_settings.py" />
-        <option value="$PROJECT_DIR$/zenspace_iot_gateway.py" />
         <option value="$PROJECT_DIR$/test2.py" />
         <option value="$PROJECT_DIR$/test.py" />
+        <option value="$PROJECT_DIR$/zenspace_iot_gateway.py" />
       </list>
     </option>
   </component>
-  <component name="ProjectFrameBounds" extendedState="7">
+  <component name="ProjectFrameBounds" extendedState="6">
     <option name="x" value="-9" />
     <option name="y" value="-9" />
     <option name="width" value="981" />
@@ -128,7 +98,6 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
-      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <expand>
@@ -140,10 +109,11 @@
           <select />
         </subPane>
       </pane>
+      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/../../ZenspaceInstaller/ZIn-ssid" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../hspt" />
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
@@ -162,7 +132,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.test">
+  <component name="RunManager" selected="Python.zenspace_iot_gateway">
     <configuration name="mqtt_azure_tls" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="mqtt_azure_tls" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -335,8 +305,8 @@
       <item itemvalue="Python.mqtt_azure_tls" />
       <item itemvalue="Python.sample" />
       <item itemvalue="Python.test1" />
-      <item itemvalue="Python.test" />
       <item itemvalue="Python.test2" />
+      <item itemvalue="Python.test" />
       <item itemvalue="Python.zenspace_iot_gateway" />
       <item itemvalue="Python.zenspace_iot_gateway_MI" />
       <item itemvalue="Python.zenspace_iot_gateway_" />
@@ -359,8 +329,8 @@
     <frame x="-8" y="-8" width="1936" height="1056" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.48303714" visible="true" weight="0.100105375" />
-      <window_info id="Structure" order="1" sideWeight="0.5169628" side_tool="true" visible="true" weight="0.100105375" />
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.48212352" visible="true" weight="0.24973656" />
+      <window_info id="Structure" order="1" sideWeight="0.5178765" side_tool="true" weight="0.24973656" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
@@ -415,23 +385,9 @@
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/../../zenspace_device_manager/deviceManager.py" />
-    <entry file="file://$PROJECT_DIR$/../demo/zenspace_hub_settings/cs.py">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/../demo/zenspace_hub_settings/zenspace_hub_settings.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="867">
-          <caret line="53" column="33" selection-start-line="53" selection-start-column="33" selection-end-line="53" selection-end-column="33" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/../zenspace_hub_settings/zenspace_hub_settings.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="281">
-          <caret line="30" column="30" selection-start-line="30" selection-start-column="30" selection-end-line="30" selection-end-column="30" />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/../demo/zenspace_hub_settings/cs.py" />
+    <entry file="file://$PROJECT_DIR$/../demo/zenspace_hub_settings/zenspace_hub_settings.py" />
+    <entry file="file://$PROJECT_DIR$/../zenspace_hub_settings/zenspace_hub_settings.py" />
     <entry file="file://$PROJECT_DIR$/app_logging.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="935">
@@ -456,31 +412,20 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/test1.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="425">
-          <caret line="29" column="65" selection-start-line="29" selection-start-column="65" selection-end-line="29" selection-end-column="65" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/test2.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="432">
-          <caret line="97" column="48" lean-forward="true" selection-start-line="90" selection-start-column="4" selection-end-line="97" selection-end-column="48" />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/test1.py" />
+    <entry file="file://$PROJECT_DIR$/test2.py" />
+    <entry file="file://$PROJECT_DIR$/zenspace_iot_gateway/zenspace_iot_gateway.py" />
     <entry file="file://$PROJECT_DIR$/test.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="129">
-          <caret line="110" column="16" lean-forward="true" selection-start-line="110" selection-start-column="16" selection-end-line="110" selection-end-column="16" />
+        <state relative-caret-position="34">
+          <caret line="2" column="6" selection-start-line="2" selection-start-column="6" selection-end-line="2" selection-end-column="36" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/zenspace_iot_gateway.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="272">
-          <caret line="226" lean-forward="true" selection-start-line="226" selection-end-line="226" />
+        <state relative-caret-position="384">
+          <caret line="640" lean-forward="true" selection-start-line="640" selection-end-line="640" />
           <folding>
             <element signature="e#0#10#0" expanded="true" />
           </folding>
