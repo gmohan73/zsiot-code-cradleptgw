@@ -24,23 +24,25 @@ import re
 #Timers for reporting status to cloud in seconds
 GATEWAY_TIMER=300
 POD_TIMER=60
-SENSOR_TIMER=1800
+SENSOR_TIMER=30
 DEVICE_TIMER=350
 CONN_TIMER=12000
 DESIRED_TIMER=10
-
+LOCK_TIMER=1
 #Global variable
 log = AppLogger()
 devicelist={};
 deviceslistbyid={};
 devicestatus={};
+devicestatuswithoutrx={};
+devicestatustemp={};
 old_devicelistbyid={};
 total_devices='';
 zenurl=settings.ZEN_URL
 iot_ip=''
 podState='Unknown';
 prevPodState='';
-cloudPodState='';
+cloudPodState="Unknown";
 beforeChangePodState=''
 AVAILCOLOR=''
 RESERVECOLOR=''
@@ -49,16 +51,20 @@ ADMININUSECOLOR=''
 RESERVEINUSECOLOR=''
 AVAILINBLINK=''
 RESERVEINBLINK=''
+LIGHTLEV=75
 beforePodState='Unknown'
 state="enabled"
 lockstate="enabled"
-
+offline=0
 lightLevTemp={"level":100,"colorTemp":153}
-
-lightState=''
-lightColor=''
-doorState=''
-lightLevel=''
+colorTemp=0
+lightState="Unknown"
+lightColor="Unknown"
+doorState="Unknown"
+tmpState=''
+lightLevel=0
+group_id=0
+cloudbeforePodState="Unknown"
 #set light state as enabled intitally
 
 #Header for gateway request
@@ -104,7 +110,9 @@ def generate_sas_token(uri, key, policy_name, expiry=86400):
     return 'SharedAccessSignature ' + urllib.parse.urlencode(rawtoken)
 
 def set_state_color():
-    global state,AVAILCOLOR,RESERVECOLOR,TIMEOUTCOLOR,ADMININUSECOLOR,RESERVEINUSECOLOR,AVAILINBLINK,RESERVEINBLINK
+    global state,AVAILCOLOR,RESERVECOLOR,TIMEOUTCOLOR,ADMININUSECOLOR,RESERVEINUSECOLOR,AVAILINBLINK,RESERVEINBLINK,group_id,tmpState
+
+
     log.debug("setting state color - {} ".format(state))
     if state == "enabled":
         AVAILCOLOR = "green"
@@ -122,54 +130,105 @@ def set_state_color():
         RESERVEINUSECOLOR = "white"
         AVAILINBLINK = 0
         RESERVEINBLINK = 0
+    res = urllib.request.urlopen(url + iot_ip + '/groups')
+    gres = res.read()
+    group_response = json.loads(gres)
+    group_list = group_response.get("groups").get("list")
+    for keys in group_list:
+        log.debug("data is {}".format(keys))
+        if keys.get('name') == 'demo lights':
+            group_id = keys.get('groupId')
+            log.debug("data is {}".format(group_id))
 
-def set_light_level_temp():
-    global lightLevTemp,state,podState
-    if state == "enabled":
-        if podState == "Reservation In Use" or podState == "Admin In Use":
-            for k, v in devicelist.items():
-
-                if ("light" in v[2]):
-                    id = v[0];
-                    dat=lightLevTemp
-                    data = json.dumps(dat).encode('utf-8')
-                    log.debug("data is {}".format(data))
-                    log.debug("url {}   and id is {}".format(url + iot_ip, id))
-                    req = urllib.request.Request(url + iot_ip + '/devices/' + id,
-                                                 headers=headers, data=data,
-                                                 method="PUT")
-                    resp = urllib.request.urlopen(req)
-    else:
-        for k, v in devicelist.items():
-
-            if ("light" in v[2]):
-                id = v[0];
-                dat = lightLevTemp
-                data = json.dumps(dat).encode('utf-8')
-                log.debug("data is {}".format(data))
-                log.debug("url {}   and id is {}".format(url + iot_ip, id))
-                req = urllib.request.Request(url + iot_ip + '/devices/' + id,
-                                             headers=headers, data=data,
-                                             method="PUT")
-                resp = urllib.request.urlopen(req)
+# def set_light_level_temp():
+#     global lightLevTemp,state,podState
+#     if state == "enabled":
+#         if podState == "Reservation In Use" or podState == "Admin In Use":
+#             for k, v in devicelist.items():
+#
+#                 if ("light" in v[2]):
+#                     id = v[0];
+#                     dat=lightLevTemp
+#                     data = json.dumps(dat).encode('utf-8')
+#                     log.debug("data is {}".format(data))
+#                     log.debug("url {}   and id is {}".format(url + iot_ip, id))
+#                     req = urllib.request.Request(url + iot_ip + '/devices/' + id,
+#                                                  headers=headers, data=data,
+#                                                  method="PUT")
+#                     resp = urllib.request.urlopen(req)
+#     else:
+#         for k, v in devicelist.items():
+#
+#             if ("light" in v[2]):
+#                 id = v[0];
+#                 dat = lightLevTemp
+#                 data = json.dumps(dat).encode('utf-8')
+#                 log.debug("data is {}".format(data))
+#                 log.debug("url {}   and id is {}".format(url + iot_ip, id))
+#                 req = urllib.request.Request(url + iot_ip + '/devices/' + id,
+#                                              headers=headers, data=data,
+#                                              method="PUT")
+#                 resp = urllib.request.urlopen(req)
 #Rule engine.Based on podState and state table provided by zenspace,it will change the state of sensors
+def group_light_change(colorcode):
+   global LIGHTLEV,group_id
+   try:
+        dat = {"on": "true", "color": colorcode,"level":LIGHTLEV}
+        data = json.dumps(dat).encode('utf-8')
+        log.debug("Group color data is {}".format(data))
+        log.debug("url {}   and id is {}".format(url + iot_ip, group_id))
+        req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
+                                     headers=headers, data=data,
+                                     method="PUT")
+        resp = urllib.request.urlopen(req)
+   except Exception as e:
+       log.debug("Exception changing Group color {}".format(e))
+
+def group_blink(blinkcount):
+   global group_id
+   try:
+       count = 1
+       while count <= blinkcount:
+            dat = {"on": "false"}
+            data = json.dumps(dat).encode('utf-8')
+            log.debug("Group color data is {}".format(data))
+            log.debug("url {}   and id is {}".format(url + iot_ip, id))
+            req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
+                                         headers=headers, data=data,
+                                         method="PUT")
+            resp = urllib.request.urlopen(req)
+            dat = {"on": "true"}
+            data = json.dumps(dat).encode('utf-8')
+            log.debug("Group color data is {}".format(data))
+            log.debug("url {}   and id is {}".format(url + iot_ip, id))
+            req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
+                                         headers=headers, data=data,
+                                         method="PUT")
+            resp = urllib.request.urlopen(req)
+            count = count + 1
+
+
+   except Exception as e:
+       log.debug("Exception blinking Group color {}".format(e))
+
 def update_pod_state():
     global podState,iot_ip,state
     global AVAILCOLOR, RESERVECOLOR, TIMEOUTCOLOR, ADMININUSECOLOR, RESERVEINUSECOLOR, AVAILINBLINK, RESERVEINBLINK
     log.debug("update pod state is -- {},state is - {}".format(podState,state))
     if podState == "Available":
+        group_light_change(AVAILCOLOR)
         for k, v in devicelist.items():
-
-            if ("light" in v[2]):
-                id = v[0];
-                dat = {"on": "true", "color": AVAILCOLOR}
-                data = json.dumps(dat).encode('utf-8')
-                log.debug("data is {}".format(data))
-                log.debug("url {}   and id is {}".format(url+iot_ip, id))
-                req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-                                             headers=headers, data=data,
-                                             method="PUT")
-                resp = urllib.request.urlopen(req)
+            #
+            # if ("light" in v[2]):
+            #     id = v[0];
+            #     dat = {"on": "true", "color": AVAILCOLOR}
+            #     data = json.dumps(dat).encode('utf-8')
+            #     log.debug("data is {}".format(data))
+            #     log.debug("url {}   and id is {}".format(url+iot_ip, id))
+            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
+            #                                  headers=headers, data=data,
+            #                                  method="PUT")
+            #     resp = urllib.request.urlopen(req)
             if ("fan" in k):
                 id = v[0];
 
@@ -181,16 +240,17 @@ def update_pod_state():
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
     elif podState == "Reserved":
+        group_light_change(RESERVECOLOR)
         for k, v in devicelist.items():
 
-            if ("light" in v[2]):
-                id = v[0];
-                dat = {"on": "true", "color": RESERVECOLOR}
-                data = json.dumps(dat).encode('utf-8')
-                req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-                                             headers=headers, data=data,
-                                             method="PUT")
-                resp = urllib.request.urlopen(req)
+            # if ("light" in v[2]):
+            #     id = v[0];
+            #     dat = {"on": "true", "color": RESERVECOLOR}
+            #     data = json.dumps(dat).encode('utf-8')
+            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
+            #                                  headers=headers, data=data,
+            #                                  method="PUT")
+            #     resp = urllib.request.urlopen(req)
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "false"}
@@ -201,16 +261,17 @@ def update_pod_state():
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
     elif podState == "Admin In Use":
+        group_light_change(ADMININUSECOLOR)
         for k, v in devicelist.items():
 
-            if ("light" in v[2]):
-                id = v[0];
-                dat = {"on": "true", "color": ADMININUSECOLOR}
-                data = json.dumps(dat).encode('utf-8')
-                req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-                                             headers=headers, data=data,
-                                             method="PUT")
-                resp = urllib.request.urlopen(req)
+            # if ("light" in v[2]):
+            #     id = v[0];
+            #     dat = {"on": "true", "color": ADMININUSECOLOR}
+            #     data = json.dumps(dat).encode('utf-8')
+            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
+            #                                  headers=headers, data=data,
+            #                                  method="PUT")
+            #     resp = urllib.request.urlopen(req)
 
             if ("fan" in k):
                 id = v[0];
@@ -222,18 +283,18 @@ def update_pod_state():
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
     elif podState == "Reservation In Use":
-
+        group_light_change(RESERVEINUSECOLOR)
         for k, v in devicelist.items():
 
-            if ("light" in v[2]):
-                id = v[0];
-
-                dat = {"on": "true", "color": RESERVEINUSECOLOR}
-                data = json.dumps(dat).encode('utf-8')
-                req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-                                             headers=headers, data=data,
-                                             method="PUT")
-                resp = urllib.request.urlopen(req)
+            # if ("light" in v[2]):
+            #     id = v[0];
+            #
+            #     dat = {"on": "true", "color": RESERVEINUSECOLOR}
+            #     data = json.dumps(dat).encode('utf-8')
+            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
+            #                                  headers=headers, data=data,
+            #                                  method="PUT")
+            #     resp = urllib.request.urlopen(req)
 
             if ("fan" in k):
                 id = v[0];
@@ -245,17 +306,18 @@ def update_pod_state():
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
     elif podState == "TimeOut":
+        group_light_change(TIMEOUTCOLOR)
         for k, v in devicelist.items():
 
-            if ("light" in v[2]):
-                id = v[0];
-                dat = {"on": "true", "color": TIMEOUTCOLOR}
-
-                data = json.dumps(dat).encode('utf-8')
-                req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-                                             headers=headers, data=data,
-                                             method="PUT")
-                resp = urllib.request.urlopen(req)
+            # if ("light" in v[2]):
+            #     id = v[0];
+            #     dat = {"on": "true", "color": TIMEOUTCOLOR}
+            #
+            #     data = json.dumps(dat).encode('utf-8')
+            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
+            #                                  headers=headers, data=data,
+            #                                  method="PUT")
+            #     resp = urllib.request.urlopen(req)
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "true"}
@@ -266,24 +328,27 @@ def update_pod_state():
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
     elif podState == "Available in Next 10 min":
+        if AVAILINBLINK == 0:
+            group_light_change("white")
+        group_blink(AVAILINBLINK)
         for k, v in devicelist.items():
 
-            if ("light" in v[2]):
-                id = v[0];
-                if AVAILINBLINK == 0:
-                    adat = {"on":"true","color":"white"}
-                    adata = json.dumps(adat).encode('utf-8')
-                    req = urllib.request.Request(url + iot_ip + '/devices/' + id,
-                                                 headers=headers, data=adata,
-                                                 method="PUT")
-                    resp = urllib.request.urlopen(req)
-
-                dat = {"command":"identify","duration":AVAILINBLINK}
-                data = json.dumps(dat).encode('utf-8')
-                req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-                                             headers=headers, data=data,
-                                             method="PUT")
-                resp = urllib.request.urlopen(req)
+            # if ("light" in v[2]):
+            #     id = v[0];
+            #     if AVAILINBLINK == 0:
+            #         # adat = {"on":"true","color":"white"}
+            #         # adata = json.dumps(adat).encode('utf-8')
+            #         # req = urllib.request.Request(url + iot_ip + '/devices/' + id,
+            #         #                              headers=headers, data=adata,
+            #         #                              method="PUT")
+            #         # resp = urllib.request.urlopen(req)
+            #
+            #     dat = {"command":"identify","duration":AVAILINBLINK}
+            #     data = json.dumps(dat).encode('utf-8')
+            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
+            #                                  headers=headers, data=data,
+            #                                  method="PUT")
+            #     resp = urllib.request.urlopen(req)
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "true"}
@@ -294,17 +359,18 @@ def update_pod_state():
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
     elif podState == "Unknown":
+        group_light_change("white")
         for k, v in devicelist.items():
 
-            if ("light" in v[2]):
-                id = v[0];
-
-                dat = {"on": "true", "color":"white"}
-                data = json.dumps(dat).encode('utf-8')
-                req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-                                             headers=headers, data=data,
-                                             method="PUT")
-                resp = urllib.request.urlopen(req)
+            # if ("light" in v[2]):
+            #     id = v[0];
+            #
+            #     dat = {"on": "true", "color":"white"}
+            #     data = json.dumps(dat).encode('utf-8')
+            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
+            #                                  headers=headers, data=data,
+            #                                  method="PUT")
+            #     resp = urllib.request.urlopen(req)
 
             if ("fan" in k):
                 id = v[0];
@@ -316,24 +382,27 @@ def update_pod_state():
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
     elif podState == "Reserved in Next 10 min":
+        if RESERVEINBLINK == 0:
+            group_light_change("white")
+        group_blink(RESERVEINBLINK)
         for k, v in devicelist.items():
 
-            if ("light" in v[2]):
-                id = v[0];
-                if RESERVEINBLINK == 0:
-                    adat = {"on": "true", "color": "white"}
-                    adata = json.dumps(adat).encode('utf-8')
-                    req = urllib.request.Request(url + iot_ip + '/devices/' + id,
-                                                 headers=headers, data=adata,
-                                                 method="PUT")
-                    resp = urllib.request.urlopen(req)
-
-                dat = {"command": "identify", "duration": RESERVEINBLINK}
-                data = json.dumps(dat).encode('utf-8')
-                req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-                                             headers=headers, data=data,
-                                             method="PUT")
-                resp = urllib.request.urlopen(req)
+            # if ("light" in v[2]):
+            #     id = v[0];
+            #     if RESERVEINBLINK == 0:
+            #         adat = {"on": "true", "color": "white"}
+            #         adata = json.dumps(adat).encode('utf-8')
+            #         req = urllib.request.Request(url + iot_ip + '/devices/' + id,
+            #                                      headers=headers, data=adata,
+            #                                      method="PUT")
+            #         resp = urllib.request.urlopen(req)
+            #
+            #     dat = {"command": "identify", "duration": RESERVEINBLINK}
+            #     data = json.dumps(dat).encode('utf-8')
+            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
+            #                                  headers=headers, data=data,
+            #                                  method="PUT")
+            #     resp = urllib.request.urlopen(req)
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "true"}
@@ -343,8 +412,9 @@ def update_pod_state():
                                              headers=headers, data=data,
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
-    set_light_level_temp()
-    sensor_status(0)
+    # set_light_level_temp()
+    # sensor_status(0)
+    sensor_status_publish()
 
 #Update pod state to salesforce
 def inform_pod_state():
@@ -369,20 +439,46 @@ def inform_pod_state():
 
 #Change pod state after admin tmieout.When state is "Admin In Use",state pushed by cloud is hold.After "Admin Timeout" ,the cloud pushed state is replaced.If cloud doesnot push any state ,in between "Admin In Use" and "Admin TmeOut",the previous state maintained by cradlepoint will be replaced.
 def change_prev_pod_state():
-    global podState,prevPodState,cloudPodState
-    log.debug("changing pod state after admin timeout -- ")
+    global podState,prevPodState,cloudPodState,tmpState,beforePodState,cloudbefore
+    log.debug("changing pod state after admin timeout --")
     log.debug("cloud pushed state - {} , prevPod state -- {}".format(cloudPodState,prevPodState))
-    if cloudPodState == '' or cloudPodState == None:
-        podState=prevPodState
+    log.debug("before pod state - {} , cloud before state is - {}".format(beforePodState,cloudbeforePodState))
+    log.debug("tmpState-- {}".format(tmpState))
+    if tmpState == "Reservation in Use":
+        log.debug("tmpState is Reservation in use")
+        tmpState= ""
     else:
-        podState=cloudPodState
-        cloudPodState=''
-    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
-                        "{\"pod_state\":\"" + podState + "\"}",
-                        qos=0)
-    update_pod_state()
-    sensor_status(0)
-    inform_pod_state()
+        # if cloudPodState == '' or cloudPodState == None:
+        if cloudPodState == "Unknown":
+                podState=prevPodState
+
+        else:
+            podState = cloudPodState
+
+
+            if cloudPodState == "Reserved in Next 10 min" or cloudPodState == "Available in Next 10 min":
+                log.debug("R10 or A10")
+                if cloudbeforePodState == "Reserved":
+                    log.debug("R10 or A10 & cbp - Reserved")
+                    group_light_change(RESERVECOLOR)
+                elif cloudbeforePodState == "Available":
+                    log.debug("R10 or A10 & cbp - Available")
+                    group_light_change(AVAILCOLOR)
+            cloudPodState = "Unknown"
+
+
+
+        log.debug("applying pod State --- {} ".format(podState))
+        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                "{\"pod_state\":\"" +podState + "\"}",
+                                qos=0)
+
+        update_pod_state()
+        #commented out inform pod state since zazi would have updated salesforce
+        #inform_pod_state()
+        # sensor_status(0)
+        sensor_status_publish()
+
 
 #To change pod state,update pod state to cloud and sales force
 def change_pod_state(state):
@@ -396,7 +492,8 @@ def change_pod_state(state):
                             "{\"pod_state\":\"" + podState + "\"}",
                             qos=0)
         update_pod_state()
-        sensor_status(0)
+        # sensor_status(0)
+        sensor_status_publish()
         inform_pod_state()
 
 
@@ -459,8 +556,10 @@ def on_subscribe(client, userdata, mid, granted_qos):
 #Desired properties sent by the cloud is converted into json format.Key is the device name and value is operation need to perform.
 #Get identity for the device from deviceslist dictionary.Then request is passed to the IOT gateway
 def on_message(client, userdata, msg):
-    global iot_ip,cloudPodState,state,lockstate
-    global podState,lightState
+    global iot_ip,cloudPodState,state,lockstate,cloudbeforePodState,beforePodState
+    global podState,lightState,LOCK_TIMER
+    global DESIRED_TIMER,DEVICE_TIMER,GATEWAY_TIMER,POD_TIMER,SENSOR_TIMER,CONN_TIMER
+
     log.debug('Device received topic: {}, msg: {}'.format(msg.topic, str(msg.payload.decode("utf-8"))))
     topic=msg.topic;
 
@@ -482,7 +581,7 @@ def on_message(client, userdata, msg):
                                     qos=0)
 
             if "light_state" in desired.keys():
-                lightState=desired.get("light_state")
+                state=desired.get("light_state")
             if "pin_auth" in desired.keys():
                 re = cs.CSClient().delete('zenspace/pin_auth')
                 y=desired.get("pin_auth")
@@ -495,6 +594,24 @@ def on_message(client, userdata, msg):
                         s = cs.CSClient().put('zenspace/pin_auth/' + str(count), data)
                         log.debug("reservation pin response {}".format(s))
                         count = count + 1
+                    data = cs.CSClient().get("zenspace/").get("data")
+
+                    print(data)
+                    try:
+                        if os.path.exists('/var/media'):
+                            log.debug("media exists - on message")
+                            with open("/var/media/auth.ini", 'w+', encoding='utf-8') as f:
+                                if data == None:
+                                    d = {}
+                                    json.dump(d, f)
+                                else:
+                                    json.dump(data, f)
+
+                            f.close()
+                        else:
+                            log.debug("media not exists - on message")
+                    except Exception as e:
+                        log.debug("Unable to write into flash {}".format(e))
 
                     # s=cs.CSClient().post('zenspace/auth',au)
 
@@ -515,6 +632,24 @@ def on_message(client, userdata, msg):
                         s = cs.CSClient().put('zenspace/admin_auth/' + str(count), data)
                         log.debug("admin pin response {}".format(s))
                         count = count + 1
+                    data = cs.CSClient().get("zenspace/").get("data")
+
+                    print(data)
+                    try:
+                        if os.path.exists('/var/media'):
+                            log.debug("media exists - on message")
+                            with open("/var/media/auth.ini", 'w+', encoding='utf-8') as f:
+                                if data == None:
+                                    d = {}
+                                    json.dump(d, f)
+                                else:
+                                    json.dump(data, f)
+
+                            f.close()
+                        else:
+                            log.debug("media not exists - on message")
+                    except Exception as e:
+                        log.debug("Unable to write into flash {}".format(e))
 
                     # s=cs.CSClient().post('zenspace/auth',au)
 
@@ -542,6 +677,24 @@ def on_message(client, userdata, msg):
                         s = cs.CSClient().put('zenspace/pin_auth/'+str(count),data)
                         log.debug("reservation pin response {}".format(s))
                         count=count+1
+                    data = cs.CSClient().get("zenspace/").get("data")
+
+                    print(data)
+                    try:
+                        if os.path.exists('/var/media'):
+                            log.debug("media exists - on message")
+                            with open("/var/media/auth.ini", 'w+', encoding='utf-8') as f:
+                                if data == None:
+                                    d = {}
+                                    json.dump(d, f)
+                                else:
+                                    json.dump(data, f)
+
+                            f.close()
+                        else:
+                            log.debug("media not exists - on message")
+                    except Exception as e:
+                        log.debug("Unable to write into flash {}".format(e))
 
                     # s=cs.CSClient().post('zenspace/auth',au)
 
@@ -561,16 +714,41 @@ def on_message(client, userdata, msg):
                         s = cs.CSClient().put('zenspace/admin_auth/'+str(count), data)
                         log.debug("admin pin response {}".format(s))
                         count=count+1
+                    data = cs.CSClient().get("zenspace/").get("data")
+
+                    print(data)
+                    try:
+                        if os.path.exists('/var/media'):
+                            log.debug("media exists - on message")
+                            with open("/var/media/auth.ini", 'w+', encoding='utf-8') as f:
+                                if data == None:
+                                    d = {}
+                                    json.dump(d, f)
+                                else:
+                                    json.dump(data, f)
+
+                            f.close()
+                        else:
+                            log.debug("media not exists - on message")
+                    except Exception as e:
+                        log.debug("Unable to write into flash {}".format(e))
 
                     # s=cs.CSClient().post('zenspace/auth',au)
 
                 except Exception as e:
                     log.debug("exception in saving the pin {}".format(e))
             elif x == "pod_state":
-                global beforePodState
+
                 beforePodState=podState
                 log.debug("pod state updated by {}".format(podState))
+                log.debug("on message first,cloud before pod state -- {} ,cloud state is -- {}".format(cloudbeforePodState,
+                                                                                                  cloudPodState))
+                if cloudPodState != None or cloudPodState!='':
+                    log.debug("in if")
+                    cloudbeforePodState = cloudPodState
                 cloudPodState=y
+
+                log.debug("on message ,cloud before pod state -- {} ,cloud state is -- {}".format(cloudbeforePodState,cloudPodState))
                 if podState == "Admin In Use":
                     log.debug(" Admin In use,cloud pushed state is by passed")
                     pass
@@ -603,6 +781,17 @@ def on_message(client, userdata, msg):
                                     qos=0)
                 set_state_color()
                 update_pod_state()
+            elif x == "timers":
+                log.debug("timers change")
+                timers=y
+                if "lock_timer" in y.keys():
+                    LOCK_TIMER=y.get("lock_timer");
+                    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                        "{\"timers\": { \"lock_timer\":\"" + str(LOCK_TIMER) + "\"}}",
+                                        qos=1)
+
+
+
             elif devicelist.__contains__(x):
 
                 id=devicelist.__getitem__(x)[0]
@@ -614,7 +803,8 @@ def on_message(client, userdata, msg):
                 log.debug("response from gateway -- {}".format(resp))
                 # single_sensor_status(id)
                 start=0
-                sensor_status(start)
+                # sensor_status(start)
+                sensor_status_publish()
             else:
                 log.debug("no such device - {}".format(x))
 
@@ -662,8 +852,8 @@ def pod_status():
                         "{\"pod_rxtime\":\"" + currenttime + "\"}", qos=0)
 
     log.info('POD Status published')
-    tz = datetime.datetime.now()
-    log.info(tz)
+
+    offline_online_check()
 
 
 #Getting single sensor status
@@ -731,8 +921,82 @@ def single_sensor_status(sensor_id):
 #IOT gateway status api returns identity not name.Name is taken from devicelistbyid dictionary.
 #If the sensor has color properties,color is determined by colorHue and colorSat of that
 #Reported property for sensors is created like the following format { ":device name" : { ":property key" : ":value" } }
+# def sensor_status(startIndex):
+#    global total_devices,iot_ip
+#    if (startIndex >= total_devices):
+#        return 1
+#    srid='4'
+#
+#    try:
+#        response=urllib.request.urlopen(url+iot_ip + '/devices/status?startIndex='+str(startIndex))
+#        respData=response.read();
+#        res=json.loads(respData)
+#        list = res.get("deviceStatus").get("list")
+#        count=0
+#        for x in list:
+#            count=count+1
+#            identifier = x.get("identifier")
+#            color = '';
+#            if x.get("colorHue") != None:
+#
+#                hue = x.get("colorHue")
+#                sat = x.get("colorSat")
+#                if hue == "150":
+#                    color = 'blue'
+#                elif hue == "80":
+#                    color = 'green'
+#                elif hue == "30":
+#                    color = 'yellow'
+#                elif hue == "10":
+#                    color = 'orange'
+#                elif hue == "210":
+#                    color = 'purple'
+#                elif hue == "0" and sat == "250":
+#                    color = 'red'
+#                else:
+#                    color = 'white'
+#
+#            if deviceslistbyid.__contains__(identifier):
+#                rep_prop = {};
+#                rep_status = {};
+#                name = deviceslistbyid.__getitem__(identifier)[0];
+#                deviceType = deviceslistbyid.__getitem__(identifier)[1];
+#                mfg=deviceslistbyid.__getitem__(identifier)[2];
+#                model = deviceslistbyid.__getitem__(identifier)[2];
+#
+#                rep_status.update({"deviceType": deviceType})
+#                rep_status.update({"mfg":mfg});
+#                rep_status.update({"model":model})
+#
+#                for y, z in x.items():
+#                    if y == "rxTime":
+#                        rep_status.update({y: str(datetime.datetime.utcfromtimestamp(z))})
+#                    elif y == "colorHue":
+#                        rep_status.update(({"color": color}))
+#                    elif y == "colorSat" or y == "colorTemp":
+#                        pass
+#                    else:
+#                        rep_status.update({y: z})
+#
+#
+#                rep_prop.update({name: rep_status})
+#
+#                if name == "" or str(name).__contains__(" "):
+#                  pass
+#                else:
+#                  devicestatus.update(rep_prop)
+#                  devicestatuswithoutrx.update(rep_prop_rx)
+#                  mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + srid,
+#                     str(rep_prop), qos=0)
+#                  mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(rep_prop),qos=1)
+#
+#        # log.info('sensor status published')
+#        return sensor_status(startIndex+count)
+#    except Exception as e:
+#         log.debug("Processing sensor status fails {}".format(e))
+#         return 1
 def sensor_status(startIndex):
-   global total_devices,iot_ip
+   global total_devices,iot_ip,colorTemp
    if (startIndex >= total_devices):
        return 1
    srid='4'
@@ -769,6 +1033,8 @@ def sensor_status(startIndex):
            if deviceslistbyid.__contains__(identifier):
                rep_prop = {};
                rep_status = {};
+               rep_prop_rx = {}
+               rep_status_rx = {};
                name = deviceslistbyid.__getitem__(identifier)[0];
                deviceType = deviceslistbyid.__getitem__(identifier)[1];
                mfg=deviceslistbyid.__getitem__(identifier)[2];
@@ -777,33 +1043,80 @@ def sensor_status(startIndex):
                rep_status.update({"deviceType": deviceType})
                rep_status.update({"mfg":mfg});
                rep_status.update({"model":model})
+               rep_status_rx.update({"deviceType": deviceType})
+               rep_status_rx.update({"mfg": mfg});
+               rep_status_rx.update({"model": model})
 
                for y, z in x.items():
                    if y == "rxTime":
                        rep_status.update({y: str(datetime.datetime.utcfromtimestamp(z))})
                    elif y == "colorHue":
                        rep_status.update(({"color": color}))
-                   elif y == "colorSat" or y == "colorTemp":
+                       rep_status_rx.update(({"color": color}))
+                   elif y == "colorSat":
                        pass
+                   elif y == "colorTemp":
+                       colorTemp=z
+
                    else:
                        rep_status.update({y: z})
+                       rep_status_rx.update(({"color": color}))
+                       rep_status_rx.update({y: z})
 
 
                rep_prop.update({name: rep_status})
+               rep_prop_rx.update({name: rep_status_rx})
 
                if name == "" or str(name).__contains__(" "):
                  pass
                else:
                  devicestatus.update(rep_prop)
+                 devicestatuswithoutrx.update(rep_prop_rx)
                  mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + srid,
                     str(rep_prop), qos=0)
-                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(rep_prop),qos=1)
+                 # mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(rep_prop),qos=1)
 
        # log.info('sensor status published')
        return sensor_status(startIndex+count)
    except Exception as e:
         log.debug("Processing sensor status fails {}".format(e))
         return 1
+
+def sensor_status_publish():
+    global devicestatuswithoutrx, devicestatustemp,devicestatus
+    print("sensor function calls")
+    log.debug("sensor function calls")
+    sensor_status(0)
+    print("sensor status function calls ends")
+    log.debug("sensor status function calls ends")
+
+    print("device status temp is {}".format(devicestatustemp))
+    #log.debug("device status temp is {}".format(devicestatustemp))
+    print("device status withoutrx is {}".format(devicestatuswithoutrx))
+    #log.debug("device status withoutrx is {}".format(devicestatuswithoutrx))
+    if len(devicestatuswithoutrx) == 0:
+        print("temp variable empty...publish all")
+        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(devicestatustemp), qos=1)
+    for (i, j), (k, l),(m,n) in zip(devicestatuswithoutrx.items(), devicestatustemp.items(),devicestatus.items()):
+        if devicestatuswithoutrx.get(i) == devicestatustemp.get(i):
+            print("same state")
+            #log.debug("same state")
+            print("\t\t\t\tdevice rx {}".format(i))
+            print("\t\t\t\tdevice status{}".format(m))
+        else:
+            print("differnet state")
+            log.debug("different state")
+            print("i is {} , j is {}".format(i,j))
+            log.debug("i is {} , j is {}".format(i,j))
+            # dat={i:j}
+            dat={m:n}
+
+            print("\t\t\t\tdevice status{}".format(devicestatus))
+            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
+
+    devicestatustemp = devicestatuswithoutrx.copy()
+    print("after a is {} ,\n\t b is {}".format(devicestatustemp, devicestatuswithoutrx))
+    #log.debug("after a is {} ,\n\t b is {}".format(devicestatustemp, devicestatuswithoutrx))
 
 
 #Number of bytes transfered and received through the cradle point's lan and wan network is send to cloud as telementery data
@@ -866,6 +1179,7 @@ def device_list(startIndex):
 
                 devicelist.update({name:[identifier,deviceType,lightPurpose]})
                 deviceslistbyid.update({identifier:[name,deviceType,mfg,model]})
+                print( " device list is {}".format(devicelist))
                 count=count+1;
             return device_list(startIndex+count)
 
@@ -888,6 +1202,19 @@ def device_list_manage():
 
 
     old_devicelistbyid.update(deviceslistbyid.copy())
+
+def offline_online_check():
+    global offline
+    conn_state = cs.CSClient().get("/status/wan/connection_state").get("data")
+    if conn_state.lower() == "connected":
+        if offline == 1:
+            log.debug("came back to online")
+            get_desired()
+            offline=0
+    else:
+        log.debug("device is offline")
+        offline = 1
+
 
 
 def lock_door():
@@ -915,7 +1242,8 @@ def lock_door():
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
                 log.debug("door locked")
-                sensor_status(0)
+                # sensor_status(0)
+                sensor_status_publish()
             else:
                 log.debug("door lock is unreachable")
                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
@@ -949,14 +1277,15 @@ def start_server():
     return 0
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-    global podState,iot_ip,state,beforePodState,devicestatus
+    global podState,iot_ip,state,beforePodState,devicestatus,colorTemp
     def do_GET(self):
 
         if None != re.search('/sensor/status',self.path):
             try:
 
 
-                sensor_status(0)
+                # sensor_status(0)
+                sensor_status_publish()
                 self.send_response(200)
                 self.send_header('Content-Type','application/json')
                 self.end_headers()
@@ -978,7 +1307,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(podstateData)
 
         elif None != re.search('/pod/LightDoorstate',self.path):
-              sensor_status(0)
+              # sensor_status(0)
+              sensor_status_publish()
               print("device status is {}".format(devicestatus))
               for i, j in devicestatus.items():
                   print("i is {} , j is {}".format(i, j))
@@ -990,7 +1320,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                       lightState=j.get("on")
                       lightColor=j.get("color")
                       lightLevel=j.get("level")
-              ldState={"light_state":lightState,"light_color":lightColor,"light_level":lightLevel,"door_state":doorState}
+              ldState={"light_state":lightState,"light_color":lightColor,"light_level":lightLevel,"door_state":doorState,"light_temp":colorTemp}
               self.send_response(200)
               self.send_header('Content-Type', 'application/json')
               self.end_headers()
@@ -1024,7 +1354,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         log.debug("POST request")
-        global podState, prevPodState
+        global podState, prevPodState,group_id,state,beforePodState
         if None != re.search('/doorLock', self.path):
 
 
@@ -1051,63 +1381,70 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                             log.debug("request body - {}".format(body))
 
                             data = json.loads(body)
-                            conn_state = cs.CSClient().get("/status/wan/connection_state").get("data")
-                            if conn_state.lower() == "connected":
-                                for x, y in data.items():
+                            # conn_state = cs.CSClient().get("/status/wan/connection_state").get("data")
+                            # if conn_state.lower() == "connected":
+                            for x, y in data.items():
 
-                                    if x == "pin":
-                                       s = verifyAuth(y)
+                                if x == "pin":
+                                   s = verifyAuth(y)
+                                   log.debug(" Value returned from authverify{}".format(s))
 
-                                       if s == 0:
-                                           log.debug("Reservation user logging in ,state is--{}".format(podState))
-
-
-                                           log.debug("Admin is not there")
-                                           self.send_response(200)
-                                           self.end_headers()
-                                           self.wfile.write(b'Door Opened')
-                                           log.debug("response code is {} - response text is {}".format("200","Door Opened"))
-
-                                           update_pod_state()
-
-                                           sensor_status(0)
-                                           inform_pod_state()
-
-                                       elif s == 1:
-                                           self.send_response(401)
-                                           self.end_headers()
-                                           self.wfile.write(b'UnAuthorized')
-                                       elif s == 2:
-                                           self.send_response(500)
-                                           self.end_headers()
-                                           self.wfile.write(b'Fail to reach gateway')
-                                       elif s == 20:
-                                           self.send_response(412)
-                                           self.end_headers()
-                                           self.wfile.write(b'No door sensor')
-                                       elif s == 202:
-                                           self.send_response(202)
-                                           self.end_headers()
-                                           self.wfile.write(b'Accepted')
-                                           log.debug("response code is {} - response text is {}".format("202", "Accepted"))
-                                       elif s == 212:
-                                           self.send_response(503)
-                                           self.end_headers()
-                                           self.wfile.write(b'Admin In Use')
-                                       else:
-                                           self.send_response(500)
-                                           self.end_headers()
-                                           self.wfile.write(b'Unexpected error')
+                                   if s == 0:
+                                       log.debug("Reservation user logging in ,state is--{}".format(podState))
 
 
-                                    else:
-                                        self.send_response(403)
-                                        self.end_headers()
-                                        self.wfile.write(b'BAD Request')
-                            else:
-                                self.send_response(503)
-                                self.end_headers()
-                                self.wfile.write(b'Service Unavailable')
+                                       log.debug("Admin is not there")
+                                       self.send_response(200)
+                                       self.end_headers()
+                                       self.wfile.write(b'Door Opened')
+                                       log.debug("response code is {} - response text is {}".format("200","Door Opened"))
+
+                                       update_pod_state()
+
+                                       # sensor_status(0)
+                                       sensor_status_publish()
+                                       inform_pod_state()
+
+                                   elif s == 1:
+                                       self.send_response(401)
+                                       self.end_headers()
+                                       self.wfile.write(b'UnAuthorized')
+                                       log.debug(" UnAuthorised")
+                                   elif s == 2:
+                                       self.send_response(500)
+                                       self.end_headers()
+                                       self.wfile.write(b'Fail to reach gateway')
+                                       log.debug(" Failed to reach gateway")
+                                   elif s == 20:
+                                       self.send_response(412)
+                                       self.end_headers()
+                                       self.wfile.write(b'No door sensor')
+                                       log.debug(" No door sensor")
+                                   elif s == 202:
+                                       self.send_response(202)
+                                       self.end_headers()
+                                       self.wfile.write(b'Accepted')
+                                       log.debug("response code is {} - response text is {}".format("202", "Accepted"))
+                                   elif s == 212:
+                                       self.send_response(503)
+                                       self.end_headers()
+                                       self.wfile.write(b'Admin In Use')
+                                       log.debug(" Admin in Use")
+                                   else:
+                                       self.send_response(500)
+                                       self.end_headers()
+                                       self.wfile.write(b'Unexpected error')
+                                       log.debug(" Unexpected error")
+
+
+                                else:
+                                    self.send_response(403)
+                                    self.end_headers()
+                                    self.wfile.write(b'BAD Request')
+                            # else:
+                            #     self.send_response(503)
+                            #     self.end_headers()
+                            #     self.wfile.write(b'Service Unavailable')
                         except Exception as e:
                             log.debug("Exception raised in /doorLock post request {}".format(e))
                             self.send_response(412)
@@ -1117,10 +1454,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.send_response(415)
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
+                        log.debug(" 415 bad request")
                 else:
                         self.send_response(412)
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
+                        log.debug(" 412 bad request")
 
         elif None != re.search('/admindoorLock', self.path):
 
@@ -1141,6 +1480,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                             adminPin = data.get("adminpin")
                             adminkey=data.get("adminkey")
                             duration=data.get("duration")
+                            log.debug("adminpin - {},adminkey - {} , duration -{}".format(adminPin,adminkey,duration))
                             admin_auth=cs.CSClient().get('zenspace/admin_auth')
                             admin_auth_list=admin_auth.get("data")
                             if admin_auth_list != None:
@@ -1166,27 +1506,38 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                             resp = urllib.request.urlopen(req)
 
                                             if (resp.status == 200):
+
                                                 self.send_response(200)
                                                 self.end_headers()
                                                 self.wfile.write(b'Door Opened')
                                                 # global podState,prevPodState
+                                                lock_door()
+                                                # curtime = datetime.datetime.utcnow()
+                                                #
+                                                # lockTime = curtime+ datetime.timedelta(seconds=LOCK_TIMER)
+                                                #
+                                                # log.debug("door  unlocked {} ,locked at {}".format(curtime,lockTime))
+                                                #
+                                                # setTimeout(lockTime, lock_door)
                                                 if podState == "Admin In Use":
                                                     pass
                                                 else:
                                                     prevPodState = podState
+                                                    log.debug("Admin timer will trigger after {}".format(duration))
                                                     setTimeoutMinutes(int(duration), change_prev_pod_state)
                                                 podState = "Admin In Use"
 
+
+                                                log.debug("Lock timer is {}".format(LOCK_TIMER))
                                                 update_pod_state()
                                                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                                                     "{\"pod_state\":\"" + podState + "\"}",
                                                                     qos=0)
-                                                curtime = datetime.datetime.utcnow()
-                                                lockTime = curtime.second + 20
 
-                                                setTimeout(lockTime, lock_door)
-                                                sensor_status(0)
-                                                inform_pod_state()
+                                                # sensor_status(0)
+                                                sensor_status_publish()
+                                                #Commented out inform pod state no need ot inform salesforce
+                                                #inform_pod_state()
 
 
                                                 # setTimeoutMinutes(int(duration),change_prev_pod_state)
@@ -1194,6 +1545,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                 self.send_response(500)
                                                 self.end_headers()
                                                 self.wfile.write(b'Fail to reach gateway')
+                                                log.debug(" Failed to reach gateway")
 
                                         else:
 
@@ -1201,30 +1553,37 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                             self.send_response(412)
                                             self.end_headers()
                                             self.wfile.write(b'No door sensor')
+                                            log.debug(" No door sensor")
                                     else:
                                         self.send_response(401)
                                         self.end_headers()
                                         self.wfile.write(b'UnAuthorized')
+                                        log.debug(" UnAuthorised")
                                 else:
                                     self.send_response(401)
                                     self.end_headers()
                                     self.wfile.write(b'UnAuthorized')
+                                    log.debug(" UnAuthorised")
                             else:
                                 self.send_response(500)
                                 self.end_headers()
                                 self.wfile.write(b'Admin pin is missing')
+                                log.debug(" Admin pin pissing")
                         else:
                             self.send_response(403)
                             self.end_headers()
                             self.wfile.write(b'BAD Request')
+                            log.debug(" 403 bad request")
                     except Exception as e:
                         self.send_response(412)
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
+                        log.debug(" 412 bad request {}".format(e))
                 else:
                     self.send_response(415)
                     self.end_headers()
                     self.wfile.write(b'BAD Request')
+                    log.debug(" 415 bad request")
 
         elif None != re.search('/pod/state',self.path):
             type = self.headers['Content-Type']
@@ -1268,7 +1627,88 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 dat = {"status": "BAD request"}
                 data = json.dumps(dat).encode("utf-8")
                 self.wfile.write(data)
+        elif None != re.search('/pod/intrusion', self.path):
+                log.debug("headers for /pod/intrusion rrequest {}".format(self.headers))
+                type = self.headers['Content-Type']
+                if 'Content-Type' in self.headers:
+                    if type == "application/json":
+                        # try:
+                            content_length = int(self.headers['Content-Length'])
+                            body = self.rfile.read(content_length)
+                            log.debug("/pod/intrusion body is {}".format(body))
+                            bdata = json.loads(body)
+                            log.debug("bdata is {}".format(bdata))
+                            data = {"on": "true", "color": "red", "level": LIGHTLEV}
 
+                            log.debug("lightState is {},podState is {},prevpodState is {},before pod state - {}".format(state, podState,
+                                                                                                  prevPodState,beforePodState))
+                            if "human" in bdata.keys():
+                                log.debug("human key is present")
+                                if state == "enabled":
+                                    log.debug("state is enabled")
+                                    hval = bdata.get("human")
+                                    log.debug("hval is {}".format(hval))
+                                    if hval == "yes":
+                                        log.debug("hval is {}".format(hval))
+                                        if podState == "Available" or podState == "Reserved":
+                                            log.debug("change color to red")
+                                            req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
+                                                                         headers=headers, data=json.dumps(data).encode('utf-8'),
+                                                                         method="PUT")
+                                            resp = urllib.request.urlopen(req)
+
+                                        elif podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min":
+                                            # if prevPodState == "Available" or prevPodState == "Reserved":
+                                            if beforePodState == "Available" or beforePodState == "Reserved":
+
+                                                req = urllib.request.Request(
+                                                    url + iot_ip + '/groups/id/' + str(group_id),
+                                                    headers=headers, data=json.dumps(data).encode('utf-8'),
+                                                    method="PUT")
+                                                resp = urllib.request.urlopen(req)
+                                    else:
+                                        if podState == "Available":
+                                            group_light_change(AVAILCOLOR)
+                                        elif podState == "Reserved":
+                                            group_light_change(RESERVECOLOR)
+
+                                        # if podState == "Available in Next 10 min" and prevPodState == "Reserved":
+                                        #     group_light_change(RESERVECOLOR)
+                                        # elif podState == "Reserved in Next 10 min" and prevPodState == "Available":
+                                        #     group_light_change(AVAILCOLOR)
+                                        # elif podState == "Reserved in Next 10 min" and prevPodState == "Reserved":
+                                        #     group_light_change(RESERVECOLOR)
+
+                                        if podState == "Available in Next 10 min" and beforePodState == "Reserved":
+                                            group_light_change(RESERVECOLOR)
+                                        elif podState == "Reserved in Next 10 min" and beforePodState == "Available":
+                                            group_light_change(AVAILCOLOR)
+                                        elif podState == "Reserved in Next 10 min" and beforePodState == "Reserved":
+                                            group_light_change(RESERVECOLOR)
+
+
+
+
+                                self.send_response(200)
+                                self.end_headers()
+                                self.wfile.write(b'Success')
+                            else:
+                                self.send_response(415)
+                                self.end_headers()
+                                self.wfile.write(b'BAD Request')
+                        # except Exception as e:
+                        #     log.debug("exception raised in /pod/intrusion request {}".format(e))
+                        #     self.send_response(412)
+                        #     self.end_headers()
+                        #     self.wfile.write(b'BAD Request')
+                    else:
+                        self.send_response(415)
+                        self.end_headers()
+                        self.wfile.write(b'BAD Request')
+                else:
+                    self.send_response(412)
+                    self.end_headers()
+                    self.wfile.write(b'BAD Request')
         elif None != re.search('/Lightsensor',self.path):
             log.debug("headers for /Lightsensor rrequest {}".format(self.headers))
             type = self.headers['Content-Type']
@@ -1280,21 +1720,41 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         log.debug("body is {}".format(body))
                         try:
                             device_list(0)
-                            for k, v in devicelist.items():
+                            data = json.loads(body)
 
-                                if ("light" in v[2]):
-                                    id = v[0];
-                                    data = json.loads(body)
-                                    log.debug("data is {}".format(data))
-                                    log.debug("url {}   and id is {}".format(url + iot_ip, id))
-                                    req = urllib.request.Request(url+iot_ip + '/devices/' + id, headers=headers, data=json.dumps(data).encode('utf-8'), method="PUT")
-                                    resp = urllib.request.urlopen(req)
+                            log.debug("data is {}".format(data))
+                            req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
+                                                         headers=headers, data=json.dumps(data).encode('utf-8'),
+                                                         method="PUT")
+                            resp = urllib.request.urlopen(req)
+
+
+                                    # curtime = datetime.datetime.utcnow()
+                                    #
+                                    # lockTime = curtime.second + LOCK_TIMER
+                                    #
+                                    # setTimeout(lockTime, lock_door)
+                            # for k, v in devicelist.items():
+                            #
+                            #     if ("light" in v[2]):
+                            #         id = v[0];
+                            #         data = json.loads(body)
+                            #         log.debug("data is {}".format(data))
+                            #         log.debug("url {}   and id is {}".format(url + iot_ip, id))
+                            #         # req = urllib.request.Request(url+iot_ip + '/devices/' + id, headers=headers, data=json.dumps(data).encode('utf-8'), method="PUT")
+                            #         # resp = urllib.request.urlopen(req)
+                            #         req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
+                            #                                      headers=headers, data=data,
+                            #                                      method="PUT")
+                            #         resp = urllib.request.urlopen(req)
 
 
                             self.send_response(200);
                             self.end_headers()
                             self.wfile.write(b'Success')
-                            sensor_status(0)
+                            # sensor_status(0)
+                            sensor_status_publish()
+
 
 
                         except Exception as e:
@@ -1339,7 +1799,15 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                     self.send_response(200);
                                     self.end_headers()
                                     self.wfile.write(b'Success')
-                                    sensor_status(0)
+                                    if sensorName == "door_lock":
+                                        if "on" in data.keys():
+                                            log.debug("door locking  {}".format(data.get("on")))
+                                            val = data.get("on")
+                                            if val == "false":
+                                                log.debug("door unlocked")
+                                                lock_door()
+                                    # sensor_status(0)
+                                    sensor_status_publish()
                                 else:
                                     self.send_response(500);
                                     self.end_headers()
@@ -1378,7 +1846,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
 def verifyAuth(pin):
-    global iot_ip
+    global iot_ip,tmpState
     auth = cs.CSClient().get("zenspace/pin_auth");
     admin_auth=cs.CSClient().get("zenspace/admin_auth")
     auth_list = auth.get("data");
@@ -1405,12 +1873,17 @@ def verifyAuth(pin):
         totalpincount = avpins.__len__()
         if pin in avpins:
             validverify = ''
+            log.debug("Pin list {}".format(pinlist))
             for k in pinlist:
                 if pin in k[0]:
                     timeIn = datetime.datetime.strptime(k[1], "%Y-%m-%d%H:%M:%S")
                     timeOut = datetime.datetime.strptime(k[2], "%Y-%m-%d%H:%M:%S")
                     curtime = datetime.datetime.utcnow()
+                    log.debug(" Current time is {}".format(curtime))
+
+
                     if (timeIn <= curtime and curtime <= timeOut):
+                        log.debug("Inside current time check")
                         validverify = "valid"
                         if devicelist.__contains__("door_lock"):
                             id = devicelist.__getitem__("door_lock")[0]
@@ -1428,54 +1901,58 @@ def verifyAuth(pin):
                                 lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
                                 diff = currenttime - lctime
                                 diffsec=diff.seconds
+
+                                dat = {"on":"false"}
+                                # log.debug("data is {}".format(data))
+                                data = json.dumps(dat).encode('utf-8')
+                                req = urllib.request.Request(url + iot_ip + '/devices/' + id, headers=headers,
+                                                             data=data,
+                                                             method="PUT")
+                                resp = urllib.request.urlopen(req)
+                                if (resp.status == 200):
+                                    log.debug("Response status code is 200 ")
+                                    global podState
+                                    if podState == "Admin In Use":
+                                        tmpState = "Reservation in Use"
+                                        #return 212
+
+
+                                    podState = "Reservation In Use"
+                                    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                                        "{\"pod_state\":\"" + podState + "\"}",
+                                                        qos=0)
+                                    currentPin = pin
+
+                                    diff = timeOut - curtime
+
+                                    lock_door()
+                                    # lockTime = curtime.second + LOCK_TIMER
+                                    #
+                                    # setTimeout(lockTime, lock_door)
+                                    timeOutSeconds = diff.seconds - 60
+                                    setTimeout(timeOutSeconds, change_pod_state, "TimeOut")
+
+
                                 if (diffsec < 900):
-                                    dat = {"on":"false"}
-                                    # log.debug("data is {}".format(data))
-                                    data = json.dumps(dat).encode('utf-8')
-                                    req = urllib.request.Request(url + iot_ip + '/devices/' + id, headers=headers,
-                                                                 data=data,
-                                                                 method="PUT")
-                                    resp = urllib.request.urlopen(req)
-                                    if (resp.status == 200):
-                                        global podState
-                                        if podState == "Admin In Use":
-                                            return 212
-                                        podState = "Reservation In Use"
-                                        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
-                                                            "{\"pod_state\":\"" + podState + "\"}",
-                                                            qos=0)
-                                        currentPin = pin
-
-                                        diff = timeOut - curtime
-
-                                        lockTime = curtime.second + 20
-
-                                        setTimeout(lockTime, lock_door)
-                                        timeOutSeconds = diff.seconds - 60
-                                        setTimeout(timeOutSeconds, change_pod_state, "TimeOut")
-
-                                        return 0
+                                    return 0
+                                    pass
                                 else:
                                     log.debug("door lock sensor is unreachable")
                                     mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                         "{\"door_lock_alert\": \"sensor unreachable \" }",
                                                         qos=1)
 
-
+                                    log.debug("In else returning 0")
                                     # return 20
                                     return 0
 
 
 
-                            else:
-                                return 2
-                            # log.debug("gaeway response {}".format(resp))
+                            # else:
+                            #     log.debug("In else returning 2")
+                            #     return 2
+                           # log.debug("gaeway response {}".format(resp))
                         else:
-
-
-
-
-
 
                             log.debug("door lock device id missing")
                             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
@@ -1484,7 +1961,10 @@ def verifyAuth(pin):
                             # return 20
                             return 0
                     else:
-                        validverify = "invalid"
+                          log.debug("valid verify invalid")
+                          validverify = "invalid"
+
+
             if validverify == "invalid":
                 if admin_auth_list != None:
                     availableadminPins = {};
@@ -1709,7 +2189,8 @@ def get_iot_ip():
 
 
 
-            sensor_status(0)
+            # sensor_status(0)
+            sensor_status_publish()
 
         else:
             print("iot ip is present")
@@ -1754,6 +2235,55 @@ mqtt_client.on_subscribe = on_subscribe
 try:
    get_iot_ip()
    set_state_color()
+   log.debug("after state color")
+   try:
+       log.debug("in main try block")
+       if os.path.exists('/var/media'):
+           print("path exists")
+           log.debug("media exists")
+           if os.path.exists('/var/media/auth.ini'):
+               print("file exists")
+               log.debug("file exists in media..")
+               with open('/var/media/auth.ini') as json_file:
+                   data1 = json.load(json_file)
+                   print(data1)
+
+                   if "pin_auth" in data1.keys():
+                       pinAuth = data1.get("pin_auth");
+                       count = 0
+                       pinAuthList = {}
+                       for p in pinAuth:
+                           pinAuthList.update(p)
+                       for k, v in pinAuthList.items():
+                           # data={k:{"TimeIn":v.get("TimeIn"),"TimeOut":v.get("TimeOut")}}
+                           data = {k: {"pin": v.get("pin"), "TimeOut": v.get("TimeOut")}}
+                           s = cs.CSClient().put('zenspace/pin_auth/' + str(count), data)
+                           log.debug("reservation pin response {}".format(s))
+                           count = count + 1
+                   if "admin_auth" in data1.keys():
+                       adminAuth = data1.get("admin_auth");
+                       count = 0
+                       adminAuthList = {}
+                       for a in adminAuth:
+                           adminAuthList.update(a)
+                       for k, v in adminAuthList.items():
+                           data = {k: v}
+                           log.debug("key is {},value is {}".format(k, v))
+                           # s = cs.CSClient().post('zenspace/admin_auth/', data)
+                           s = cs.CSClient().put('zenspace/admin_auth/' + str(count), data)
+                           log.debug("admin pin response {}".format(s))
+                           count = count + 1
+
+
+           else:
+               print("not exists")
+               log.debug("media exists,file absent")
+
+       else:
+           print("not exists")
+           log.debug("media not exists")
+   except Exception as e:
+       log.debug("Unable to read from flash {}".format(e))
 
    if iot_hub_name !=None and pod_key !=None and pod_id !=None:
     mqtt_client.username_pw_set(username=iot_hub_name + '.azure-devices.net/' + pod_id+'/api-version=2018-06-30', password=generate_sas_token(iot_hub_name+".azure-device.net/devices"+pod_id,pod_key,pod_id))
@@ -1791,6 +2321,9 @@ try:
     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                         "{\"lock_state\":\"" + lockstate + "\"}",
                         qos=1)
+    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                        "{\"timers\": { \"lock_timer\":\"" + str(LOCK_TIMER) + "\"}}",
+                        qos=1)
 
     # inform_pod_state()
 
@@ -1812,12 +2345,14 @@ try:
             setInterval(DEVICE_TIMER+120, device_list_manage)
 
 
-        sensor_status(start)
+        # sensor_status(start)
+        sensor_status_publish()
         pod_status()
         setInterval(DEVICE_TIMER, device_list,start)
         setInterval(POD_TIMER, pod_status)
         setInterval(GATEWAY_TIMER,gateway_status)
-        setInterval(SENSOR_TIMER,sensor_status,start)
+        # setInterval(SENSOR_TIMER,sensor_status,start)
+        setInterval(SENSOR_TIMER, sensor_status_publish)
         setInterval(CONN_TIMER,network_stats)
         setInterval(GATEWAY_TIMER,get_iot_ip)
     _thread.start_new_thread(start_server, ())
