@@ -1,354 +1,230 @@
-<!DOCTYPE HTML>
+<!DOCTYPE html>
 <html>
-<head>
-	
-	     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes">
-		<title>ZenSpace Login</title>
+	<head>
+		<!--<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">-->
+		<!--<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>-->
+		<!--<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>-->
+		<link rel="stylesheet" href="resources/bootstrap.min.css"  />
+		<script src="resources/bootstrap.min.js"></script>
+		<script src="resources/jquery.min.js"></script>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<style>
+			.pinInput{
+				width:60px;
+				height:60px;
+				margin:10px;
+				border-radius:10px;
+				background-color: #cbe3fb;
+				text-align:center;
+				font-size:30px;
+			}
+			.logoContainer{
+				background-color: #418FFF;
+				display: flex;
+                justify-content: center;
+                flex-direction: column;
+			}
+			.inputContainer{
+				display: flex;
+                justify-content: center;
+                flex-direction: column;
+				padding-top: 50px;
+			}
+			.logo{
+				width:280px; 
+				height:160px;
+				margin-top:20px;
+				margin-bottom:20px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container-fluid h-100">
+			<div class="row logoContainer">
+				<div class="d-flex justify-content-center h-100">
+                    <div class="col-sm-12 d-flex justify-content-center">
+                        <img src="resources/logo.png" class="logo" alt="logo.png not found" />
+                    </div>
+                </div>
+            </div>
+			
+			<div class="row inputContainer" style="background-color:white; border-radius: 5px;">
+				<div class="d-flex justify-content-center h-100">
+					<div class="col-sm-12 d-flex justify-content-center">
+						<form method="POST" id="loginform">
+							<table>
+								<tr>
+									<td colspan="4"><h2 style="text-align:center;" id="pinHeaderTitle">Enter Key</h2></td>
+								</tr>
+								<tr id="inputFieldContainer">
+									<td>
+										<input type="text" id="pinInput01" maxlength="1" class="pinInput" />
+									</td>
+									<td>
+										<input type="text" id="pinInput02" maxlength="1" class="pinInput" />
+									</td>
+									<td>
+										<input type="text" id="pinInput03" maxlength="1" class="pinInput" />
+									</td>
+									<td>
+										<input type="text" id="pinInput04" maxlength="1" class="pinInput" />
+									</td>
+								</tr>
+								<tr>
+									<td colspan="4" id="timeChooser"></td>
+								</tr>
+								<tr>
+									<td colspan="4" id="submitButtonContainer"></td>
+								</tr>
+								<tr>
+									<td colspan="4"><p style="text-align:center;" id="pinbodyStatus"></p></td>
+								</tr>
+							</table>
+						</form>
+					</div>
+				</div>			
+			</div>
+		</div>
 		
-</head>
-
-<link href="resources/generic.css" rel="stylesheet" type="text/css"/>
-<script src="resources/jquery.min.js" ></script>
-<body>
-   <div align="center" style="width:screen.width;height:screen.height;">
-   <div id="generic_picture" >
-			<img src="resources/zenspace.jpg" width="screen.width"/>
-	</div>
-	<div id="about">
-	   <label style="margin-left:10px;font-size:0.6em;color:grey">On-demand Meeting space</label><br/>
-	   <label style="margin-left:15px;font-size:0.6em;color:grey">Anytime.Anyplace     </label>
-	</div>
-	<form method="POST" id="loginform" onsubmit="return test();">
-	<table>
-	 <tr>
-	   <td>
-	     <label>KEY</label>
-		</td>
-		<td>
-		</td>
-
-
-	  <td>	
-	     <input type="password"  placeholder="Enter KEY" title="Enter alphanumeric key" id="rpin" name="name" pattern="[A-Za-z0-9]{4}" maxlength="4" required="required"/>      
-	  </td>
-     </tr> 	  
-	</table>
-	<table id="adminpin">
-	  <tr>
-	   <td>
-	     <label>PIN</label>
-		</td>
-		<td>
-		</td>
-
-	  <td>	
-	     <input type="password"  placeholder="Enter PIN" title="Enter 4 digit PIN" id="apin" name="name" pattern="[A-Za-z0-9]{4}" maxlength="4" />      
-	  </td>
-	  
-
-     </tr> 	  
-	 <tr>
-	 
-	 
-		<td>
-	    <label>Duration</label>
-		</td>
-		<td>
-		</td>
-
-		<td>
-	    <select id="duration">
-		<option selected="selected" value="Select duration">Select duration</option>
-		<option value="15">15</option>
-		<option value="30">30</option>
-		<option value="45">40</option>
-		<option value="60">60</option>
-		</select>
-	  </td>
-	  <td>
-	  </td>
-	 </tr>
-	</table>
-	<div style="color:black">
-     <p> Zenspace terms and conditions</p>
-   </div>
-	<div  align="center" >
-  	   <button type="submit" id="ag" name="agree" >I Agree to terms</button>
-	   
-	   
-	</div>  
-	<div style="margin-top:10px">
-	
-	   <label class="error" id="rpin_error">Enter alphanumeric key.</label>
-	   <label class="error" id="rpin_ex_error"></label>
-	   <label class="error" id="apin_error">Enter 4 digit number.</label>
-	   <label class="error" id="apin_ex_error"></label>
-    </div>	
-	
-   </form>
-   </div>
-</body>
-<script>
-	var adminPin = document.getElementById("adminpin").getElementsByTagName('*');
-       for(var i = 0; i < adminPin.length; i++){
-           adminPin[i].disabled = true;
-       }
-       
-       $('#adminpin').children().
-       css({ 'opacity' : 0 }).
-       end().
-       css({ 'opacity' : 0 });
-       
- 
-
-
-     document.getElementById("rpin").onchange = function (evt) {
-
-                            if (evt.target.checkValidity()) {
-                                // OK
-                                document.getElementById("rpin_error").style.display = "none";
-								
-                            } else {
-                                // NOT OK
-                                document.getElementById("rpin_error").style.display = "inline-block";
-                            }
-                        };
-                        document.getElementById("rpin").oninput = function (evt){
-							document.getElementById("ag").disabled=true;
-						document.getElementById("rpin_ex_error").style.display = "none";
-                            if (evt.target.checkValidity()) {
-                                // OK
-                                document.getElementById("rpin_error").style.display = "none";
-								validate();
-                            }
-							else {
-                                // NOT OK
-                                document.getElementById("rpin_error").style.display = "inline-block";
-                            }
-                        };
-						
-	document.getElementById("apin").onchange = function (evt) {
-
-                            if (evt.target.checkValidity()) {
-                                // OK
-                                document.getElementById("rpin_error").style.display = "none";
-								
-                            } else {
-                                // NOT OK
-                                document.getElementById("rpin_error").style.display = "inline-block";
-                            }
-                        };
-                        document.getElementById("apin").oninput = function (evt){
+		<script>
+			
+			var pIndex=1;
+			var keyPin = "";
+			
+			$('.pinInput').on('input', function(e){
+			  if(this.value.length>0){
+				
+				if(pIndex<4)
+				  pIndex++;
+				$('#pinInput0'+pIndex).focus();
+			  }else{
+				if(pIndex>1)
+				  pIndex--;
+				$('#pinInput0'+pIndex).focus();
+			  }
+			});
+			
+			$('#pinInput01').on('input', function(e){
+			  onUserPinValidation();
+			});
+			$('#pinInput02').on('input', function(e){
+			  onUserPinValidation();
+			});
+			$('#pinInput03').on('input', function(e){
+			  onUserPinValidation();
+			});
+			$('#pinInput04').on('input', function(e){
+			  onUserPinValidation();
+			});
+			
+			$('.pinInput').on('focus', function(e){
+				pIndex = $(this).attr('id')[$(this).attr('id').length-1];
+			});
+			
+			function onUserPinValidation(){
+			   
+				if(keyPin.length!=4){
+					var pin = $('#pinInput01').val() + $('#pinInput02').val() + $('#pinInput03').val() + $('#pinInput04').val();
+					if(pin.length==4){
+						var pattern = new RegExp('[A-Za-z0-9]{4}');
+						if (pattern.test(pin)) {
+							document.getElementById("pinbodyStatus").style.color="black";
+							$('#pinbodyStatus').html("");
+							pin_data='{"pin":"'+pin+'"}'
 							
-						document.getElementById("rpin_ex_error").style.display = "none";
-                            if (evt.target.checkValidity()) {
-                                // OK
-                                document.getElementById("rpin_error").style.display = "none";
-
-                            }
-							else {
-                                // NOT OK
-                                document.getElementById("rpin_error").style.display = "inline-block";
-                            }
-                        };
-	document.getElementById("duration").onchange = function (evt) {
-
-
-                            if (evt.target.checkValidity()) {
-                                // OK
-                                document.getElementById("rpin_error").style.display = "none";
-								validate_admin();
-                            } else {
-                                // NOT OK
-                                document.getElementById("rpin_error").style.display = "inline-block";
-                            }
-                        };
-                        
-					
-
-function test()
-{
- 
-  var s=document.getElementById("ag").disabled;
-    
-  if(s == "false")
-  {
-    document.getElementById("ag").value="Fail";
-    return false;
-  }
-  else
-  {
-    document.getElementById("rpin_ex_error").innerHTML="Validated..";
-	document.getElementById("rpin_ex_error").innerHTML="Start browsing now..";
-	document.getElementById("ag").value="Success";
-    		
-    return true;
-  }
-  
-} 
-
-
-
-function validate ()
- {
-	document.getElementById("rpin_ex_error").innerHTML="validating...";
-	document.getElementById("rpin_ex_error").style.display="inline-block";
-    var pin=document.getElementById("rpin").value;
-	
-	var http = new XMLHttpRequest();
-	
-	
-	var getUrl='http://192.168.100.1:9002/'
-	var url=getUrl+'doorLock'
-	
-	var params = '{"pin":"'+pin+'"}'
-
-	http.open('POST', url,true);
-	/*if(http.status == 200 )
-	{
-	   document.getElementById("rpin_ex_error").innerHTML="validating in progress.";
-	}
-	else
-	{
-	   document.getElementById("rpin_ex_error").style.color="red"
-	   document.getElementById("rpin_ex_error").innerHTML="Server unreachable. Try again.";
-	}
-  */
-	//Send the proper header information along with the request
-	
-	http.setRequestHeader("Content-Type", "application/json");
-    
-	http.onreadystatechange = function() {
-	
-	//Call a function when the state changes.
-	  	 
-		if(http.readyState == 4 && http.status == 200 || http.status == 401 || http.status == 202) {
-	       
-			
-			var s=JSON.parse(http.responseText);
-			
-		    if( s.success == "false" || s.success == "timeout" )
-			{
-			   document.getElementById("rpin_ex_error").style.color="red"
-			   document.getElementById("rpin_ex_error").innerHTML="Incorrect PIN. Try again.";
-			   document.getElementById("rpin_ex_error").style.display = "inline-block";
-			   document.getElementById("ag").disabled=true;
-			}
-			else if(s.success == "true" )
-			{
-			   document.getElementById("rpin_ex_error").style.color="#0D47A1";
-			   document.getElementById("rpin_ex_error").innerHTML="Click agree to continue.";
-			   document.getElementById("ag").disabled=false;
-			   
-			  
-			}
-			else if(s.success == "ok" )
-			{
-				document.getElementById("rpin_ex_error").style.color="#0D47A1";
-				var adminPin = document.getElementById("adminpin").getElementsByTagName('*');
-				   for(var i = 0; i < adminPin.length; i++){
-					   adminPin[i].disabled = false;
-				   }
-				   
-				   $('#adminpin').children().
-				   css({ 'opacity' : 100 }).
-				   end().
-				   css({ 'opacity' : 100 });
-						
+							$.ajax({
+								type:"POST",
+								url: "http://192.168.100.1:9002/doorLock",
+								Content_Type: "application/json",
+								dataType:"json",
+								data:pin_data,
+								complete: function(xhr, textStatus) {
+									//console.log("complete: "+JSON.stringify(xhr));
+									if(xhr.readyState == 4 && xhr.status == 200 || xhr.status == 401 || xhr.status == 202) {
+										var s=JSON.parse(xhr.responseText);
+										if( s.success == "false" || s.success == "timeout" ){
+										   document.getElementById("pinbodyStatus").style.color="red";
+										   document.getElementById("pinbodyStatus").innerHTML="Incorrect PIN, try again.";
+										}else if(s.success == "true" ){
+										   document.getElementById("pinbodyStatus").style.color="green";
+										   document.getElementById("pinbodyStatus").innerHTML="Access granted.";
+										   document.forms["loginform"].submit();
+										}else if(s.success == "exceed"){
+										   document.getElementById("pinbodyStatus").style.color="red";
+										   document.getElementById("pinbodyStatus").innerHTML="Max number of users exceed";
+										}
+										else if(s.success == "ok" ){
+											keyPin = pin;
+											document.getElementById("pinInput01").value=''
+											document.getElementById("pinInput02").value=''
+											document.getElementById("pinInput03").value=''
+											document.getElementById("pinInput04").value=''
+											$('#pinInput01').focus();
+											document.getElementById("timeChooser").innerHTML = "<select class=\"form-control\" id=\"durationSel\" style=\"margin-bottom:20px;\"><option>Select duration</option><option>15 min</option><option>30 min</option><option>45 min</option><option>60 min</option></select>";
+											document.getElementById("submitButtonContainer").innerHTML = "<input type=\"button\" class=\"btn btn-primary btn-block\" id=\"submitButton\" value=\" Login \" style=\"padding:13px; font-size:22px;\" onclick=\"onAdminPinSubmit()\"></input>";
+											document.getElementById("pinHeaderTitle").innerHTML = "Enter Pin";
+										}	 
+									}else{
+									   //alert(xhr.responseText);
+									}
+								}
+							});
+						}else{
+							$('#pinbodyStatus').html("Incorrect PIN format.");
+							document.getElementById("pinbodyStatus").style.color="red"
 						}
+					}
+				}
+			}
+			
+			function onAdminPinSubmit(){
+				var pin = $('#pinInput01').val() + $('#pinInput02').val() + $('#pinInput03').val() + $('#pinInput04').val();
+				var duration=$('#durationSel').val()
+				var dtime=duration.split(" ")[0]
+				
+				
+				if(pin.length==4){
+					var pattern = new RegExp('[A-Za-z0-9]{4}');
+					if (pattern.test(pin)) {
+						document.getElementById("pinbodyStatus").style.color="black";
+						$('#pinbodyStatus').html("");
+						admin_data='{"adminkey":"'+keyPin+'","adminpin":"'+pin+'","duration":"'+dtime+'"}'
 						
-		  	 
-		}
-		
-		else{
-		   //alert(http.responseText);
-		}
-	   
-	
-	}
-	 http.send(params);
-	 
-	
-	
-	
-	
-
- }
- 
-function validate_admin()
-{
-	document.getElementById("rpin_ex_error").innerHTML="validating...";
-	document.getElementById("rpin_ex_error").style.display="inline-block";
-    var key=document.getElementById("rpin").value;
-	var pin=document.getElementById("apin").value;
-	var duration=document.getElementById("duration").value;
-
-	
-	var http = new XMLHttpRequest();
-	
-	
-	var getUrl='http://192.168.100.1:9002/'
-	var url=getUrl+'admindoorLock'
-	
-	var params = '{"adminkey":"'+key+'","adminpin":"'+pin+'","duration":"'+duration+'"}'
-	//alert(params)
-	http.open('POST', url,true);
-	/*if(http.status == 200 )
-	{
-	   document.getElementById("rpin_ex_error").innerHTML="validating in progress.";
-	}
-	else
-	{
-	   document.getElementById("rpin_ex_error").style.color="red"
-	   document.getElementById("rpin_ex_error").innerHTML="Server unreachable. Try again.";
-	}
-  */
-	//Send the proper header information along with the request
-	
-	http.setRequestHeader("Content-Type", "application/json");
-    
-	http.onreadystatechange = function() {
-	
-	//Call a function when the state changes.
-	  	 
-		if(http.readyState == 4 && http.status == 200 || http.status == 401 ) {
-	       
-			
-			var s=JSON.parse(http.responseText);
-			
-		    if( s.success == "false" || s.success == "timeout" )
-			{
-			   document.getElementById("rpin_ex_error").style.color="red"
-			   document.getElementById("rpin_ex_error").innerHTML="Incorrect PIN. Try again.";
-			   document.getElementById("rpin_ex_error").style.display = "inline-block";
-			   document.getElementById("ag").disabled=true;
+						$.ajax({
+							type:"POST",
+							url: "http://192.168.100.1:9002/admindoorLock",
+							Content_Type: "application/json",
+							dataType:"json",
+							data:admin_data,
+							complete: function(xhr, textStatus) {
+								//console.log("complete: "+JSON.stringify(xhr));
+								if(xhr.readyState == 4 && xhr.status == 200 || xhr.status == 401) {
+									var s=JSON.parse(xhr.responseText);
+									if( s.success == "false" || s.success == "timeout" ){
+									   document.getElementById("pinbodyStatus").style.color="red";
+									   document.getElementById("pinbodyStatus").innerHTML="Incorrect PIN, try again.";
+									}else if(s.success == "true" ){
+									   document.getElementById("pinbodyStatus").style.color="green";
+									   document.getElementById("pinbodyStatus").innerHTML="Access granted.";
+									   document.forms["loginform"].submit();
+									}
+									else if(s.success == "exceed"){
+										   document.getElementById("pinbodyStatus").style.color="red";
+										   document.getElementById("pinbodyStatus").innerHTML="Max number of users exceed";
+										}	
+								}else{
+								   //alert(xhr.responseText);
+								}
+							}
+						});
+						
+					}else{
+						$('#pinbodyStatus').html("Incorrect PIN format.");
+						document.getElementById("pinbodyStatus").style.color="red"
+					}
+				}
 			}
-			else if(s.success == "true" )
-			{
-			   document.getElementById("rpin_ex_error").style.color="#0D47A1";
-			   document.getElementById("rpin_ex_error").innerHTML="Click agree to continue.";
-			   document.getElementById("ag").disabled=false;
-			   
-			  
-			}
-			 
-		}
+		</script>
 		
-		else{
-		   //alert(http.responseText);
-		}
-	   
-	
-	}
-	 http.send(params);
-	 
-	
-	
-	
-
-}  
- 
-</script>
-   
+	</body>
+</html>

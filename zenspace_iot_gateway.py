@@ -65,6 +65,8 @@ tmpState=''
 lightLevel=0
 group_id=0
 cloudbeforePodState="Unknown"
+fanState="enabled"
+mqtt_flag=0
 #set light state as enabled intitally
 
 #Header for gateway request
@@ -140,35 +142,6 @@ def set_state_color():
             group_id = keys.get('groupId')
             log.debug("data is {}".format(group_id))
 
-# def set_light_level_temp():
-#     global lightLevTemp,state,podState
-#     if state == "enabled":
-#         if podState == "Reservation In Use" or podState == "Admin In Use":
-#             for k, v in devicelist.items():
-#
-#                 if ("light" in v[2]):
-#                     id = v[0];
-#                     dat=lightLevTemp
-#                     data = json.dumps(dat).encode('utf-8')
-#                     log.debug("data is {}".format(data))
-#                     log.debug("url {}   and id is {}".format(url + iot_ip, id))
-#                     req = urllib.request.Request(url + iot_ip + '/devices/' + id,
-#                                                  headers=headers, data=data,
-#                                                  method="PUT")
-#                     resp = urllib.request.urlopen(req)
-#     else:
-#         for k, v in devicelist.items():
-#
-#             if ("light" in v[2]):
-#                 id = v[0];
-#                 dat = lightLevTemp
-#                 data = json.dumps(dat).encode('utf-8')
-#                 log.debug("data is {}".format(data))
-#                 log.debug("url {}   and id is {}".format(url + iot_ip, id))
-#                 req = urllib.request.Request(url + iot_ip + '/devices/' + id,
-#                                              headers=headers, data=data,
-#                                              method="PUT")
-#                 resp = urllib.request.urlopen(req)
 #Rule engine.Based on podState and state table provided by zenspace,it will change the state of sensors
 def group_light_change(colorcode):
    global LIGHTLEV,group_id
@@ -214,21 +187,11 @@ def group_blink(blinkcount):
 def update_pod_state():
     global podState,iot_ip,state
     global AVAILCOLOR, RESERVECOLOR, TIMEOUTCOLOR, ADMININUSECOLOR, RESERVEINUSECOLOR, AVAILINBLINK, RESERVEINBLINK
-    log.debug("update pod state is -- {},state is - {}".format(podState,state))
+    log.debug("update pod state is -- {},light state is - {}".format(podState,state))
     if podState == "Available":
         group_light_change(AVAILCOLOR)
         for k, v in devicelist.items():
-            #
-            # if ("light" in v[2]):
-            #     id = v[0];
-            #     dat = {"on": "true", "color": AVAILCOLOR}
-            #     data = json.dumps(dat).encode('utf-8')
-            #     log.debug("data is {}".format(data))
-            #     log.debug("url {}   and id is {}".format(url+iot_ip, id))
-            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-            #                                  headers=headers, data=data,
-            #                                  method="PUT")
-            #     resp = urllib.request.urlopen(req)
+            
             if ("fan" in k):
                 id = v[0];
 
@@ -243,14 +206,6 @@ def update_pod_state():
         group_light_change(RESERVECOLOR)
         for k, v in devicelist.items():
 
-            # if ("light" in v[2]):
-            #     id = v[0];
-            #     dat = {"on": "true", "color": RESERVECOLOR}
-            #     data = json.dumps(dat).encode('utf-8')
-            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-            #                                  headers=headers, data=data,
-            #                                  method="PUT")
-            #     resp = urllib.request.urlopen(req)
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "false"}
@@ -264,15 +219,7 @@ def update_pod_state():
         group_light_change(ADMININUSECOLOR)
         for k, v in devicelist.items():
 
-            # if ("light" in v[2]):
-            #     id = v[0];
-            #     dat = {"on": "true", "color": ADMININUSECOLOR}
-            #     data = json.dumps(dat).encode('utf-8')
-            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-            #                                  headers=headers, data=data,
-            #                                  method="PUT")
-            #     resp = urllib.request.urlopen(req)
-
+            
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "true"}
@@ -285,17 +232,6 @@ def update_pod_state():
     elif podState == "Reservation In Use":
         group_light_change(RESERVEINUSECOLOR)
         for k, v in devicelist.items():
-
-            # if ("light" in v[2]):
-            #     id = v[0];
-            #
-            #     dat = {"on": "true", "color": RESERVEINUSECOLOR}
-            #     data = json.dumps(dat).encode('utf-8')
-            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-            #                                  headers=headers, data=data,
-            #                                  method="PUT")
-            #     resp = urllib.request.urlopen(req)
-
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "true"}
@@ -308,16 +244,6 @@ def update_pod_state():
     elif podState == "TimeOut":
         group_light_change(TIMEOUTCOLOR)
         for k, v in devicelist.items():
-
-            # if ("light" in v[2]):
-            #     id = v[0];
-            #     dat = {"on": "true", "color": TIMEOUTCOLOR}
-            #
-            #     data = json.dumps(dat).encode('utf-8')
-            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-            #                                  headers=headers, data=data,
-            #                                  method="PUT")
-            #     resp = urllib.request.urlopen(req)
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "true"}
@@ -332,23 +258,6 @@ def update_pod_state():
             group_light_change("white")
         group_blink(AVAILINBLINK)
         for k, v in devicelist.items():
-
-            # if ("light" in v[2]):
-            #     id = v[0];
-            #     if AVAILINBLINK == 0:
-            #         # adat = {"on":"true","color":"white"}
-            #         # adata = json.dumps(adat).encode('utf-8')
-            #         # req = urllib.request.Request(url + iot_ip + '/devices/' + id,
-            #         #                              headers=headers, data=adata,
-            #         #                              method="PUT")
-            #         # resp = urllib.request.urlopen(req)
-            #
-            #     dat = {"command":"identify","duration":AVAILINBLINK}
-            #     data = json.dumps(dat).encode('utf-8')
-            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-            #                                  headers=headers, data=data,
-            #                                  method="PUT")
-            #     resp = urllib.request.urlopen(req)
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "true"}
@@ -361,16 +270,6 @@ def update_pod_state():
     elif podState == "Unknown":
         group_light_change("white")
         for k, v in devicelist.items():
-
-            # if ("light" in v[2]):
-            #     id = v[0];
-            #
-            #     dat = {"on": "true", "color":"white"}
-            #     data = json.dumps(dat).encode('utf-8')
-            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-            #                                  headers=headers, data=data,
-            #                                  method="PUT")
-            #     resp = urllib.request.urlopen(req)
 
             if ("fan" in k):
                 id = v[0];
@@ -386,23 +285,6 @@ def update_pod_state():
             group_light_change("white")
         group_blink(RESERVEINBLINK)
         for k, v in devicelist.items():
-
-            # if ("light" in v[2]):
-            #     id = v[0];
-            #     if RESERVEINBLINK == 0:
-            #         adat = {"on": "true", "color": "white"}
-            #         adata = json.dumps(adat).encode('utf-8')
-            #         req = urllib.request.Request(url + iot_ip + '/devices/' + id,
-            #                                      headers=headers, data=adata,
-            #                                      method="PUT")
-            #         resp = urllib.request.urlopen(req)
-            #
-            #     dat = {"command": "identify", "duration": RESERVEINBLINK}
-            #     data = json.dumps(dat).encode('utf-8')
-            #     req = urllib.request.Request(url+iot_ip + '/devices/' + id,
-            #                                  headers=headers, data=data,
-            #                                  method="PUT")
-            #     resp = urllib.request.urlopen(req)
             if ("fan" in k):
                 id = v[0];
                 # dat = {"on": "true"}
@@ -412,8 +294,7 @@ def update_pod_state():
                                              headers=headers, data=data,
                                              method="PUT")
                 resp = urllib.request.urlopen(req)
-    # set_light_level_temp()
-    # sensor_status(0)
+    
     sensor_status_publish()
 
 #Update pod state to salesforce
@@ -425,8 +306,7 @@ def inform_pod_state():
         data = urllib.parse.urlencode(dat).encode('utf-8')
         req = urllib.request.Request(zen_state_url + pod_id + "/", headers=headers, data=data, method="POST")
         resp = urllib.request.urlopen(req)
-        log.debug("url {}".format(zen_state_url + pod_id + "/"))
-        log.debug("sending state is -- {} ".format(podState))
+        log.debug("informing pod state to salsesforce -- {} ".format(podState))
         log.debug("response from zenStateURL {}".format(json.loads(resp.read())))
 
 
@@ -536,9 +416,9 @@ def on_disconnect(client, userdata, rc):
 # it does not always mean that the message has been sent.
 def on_publish(client, userdata, mid):
 
-    # log.info('Device sent message')
+    log.info('Device sent message {} '.format(mid))
 
-    pass
+    
 
 
 # Called when the broker responds to a subscribe request. The mid variable
@@ -582,6 +462,8 @@ def on_message(client, userdata, msg):
 
             if "light_state" in desired.keys():
                 state=desired.get("light_state")
+            if "fan_state" in desired.keys():
+                fanState=desired.get("fan_state")		
             if "pin_auth" in desired.keys():
                 re = cs.CSClient().delete('zenspace/pin_auth')
                 y=desired.get("pin_auth")
@@ -773,6 +655,13 @@ def on_message(client, userdata, msg):
                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                     "{\"lock_state\":\"" + lockstate + "\"}",
                                     qos=0)
+            elif x == "fan_state":
+                log.debug("state of the door updated - {}".format(y))
+                fanState = y
+                mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                    "{\"fan_state\":\"" + fanState + "\"}",
+                                    qos=0)
+											
             elif x == "light_state":
                 log.debug("state of the light updated - {}".format(y))
                 state=y
@@ -829,15 +718,19 @@ def gateway_status():
         log.debug('gateway not reachable-{}'.format(ex))
         status="Not connected"
 
+    try:
+        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                        "{\"gateway_status\":\"" + status + "\"}", qos=0)
+        currentdate=datetime.datetime.now().date()
+        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + dt,
+                            "{\"local_date\":\"" + str(currentdate) + "\"}",
+                            qos=1)
+        log.info('Gateway status published')
+    except Exception as e:
+        log.debug('Gateway status not publidhed - {}'.format(e))
 
-    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
-                    "{\"gateway_status\":\"" + status + "\"}", qos=0)
-    currentdate=datetime.datetime.now().date()
-    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + dt,
-                        "{\"local_date\":\"" + str(currentdate) + "\"}",
-                        qos=1)
 
-    log.info('Gateway status published')
+
 
 
 
@@ -845,15 +738,18 @@ def gateway_status():
 #Current local time of the cradle point is treated as pod keep-alive time.
 def pod_status():
     # currenttime = time.asctime(time.localtime(time.time()))
+    try:
+        log.debug("  Number of active threads == {}".format(active_count()))
+        currenttime=str(datetime.datetime.utcnow().replace(microsecond=0))
+        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                            "{\"pod_rxtime\":\"" + currenttime + "\"}", qos=0)
 
-    log.debug("  Number of active threads == {}".format(active_count()))
-    currenttime=str(datetime.datetime.utcnow().replace(microsecond=0))
-    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
-                        "{\"pod_rxtime\":\"" + currenttime + "\"}", qos=0)
+        log.info('POD Status published')
 
-    log.info('POD Status published')
 
-    offline_online_check()
+        offline_online_check()
+    except Exception as e:
+        log.info('pod status not published {}'.format(e))
 
 
 #Getting single sensor status
@@ -915,86 +811,15 @@ def single_sensor_status(sensor_id):
                                     str(rep_prop), qos=0)
                 mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(rep_prop), qos=1)
 
-    log.info('sensor status published')
+
+
+
+
 
 #Status for sensors which all are connected to IOT gateway was read.
 #IOT gateway status api returns identity not name.Name is taken from devicelistbyid dictionary.
 #If the sensor has color properties,color is determined by colorHue and colorSat of that
 #Reported property for sensors is created like the following format { ":device name" : { ":property key" : ":value" } }
-# def sensor_status(startIndex):
-#    global total_devices,iot_ip
-#    if (startIndex >= total_devices):
-#        return 1
-#    srid='4'
-#
-#    try:
-#        response=urllib.request.urlopen(url+iot_ip + '/devices/status?startIndex='+str(startIndex))
-#        respData=response.read();
-#        res=json.loads(respData)
-#        list = res.get("deviceStatus").get("list")
-#        count=0
-#        for x in list:
-#            count=count+1
-#            identifier = x.get("identifier")
-#            color = '';
-#            if x.get("colorHue") != None:
-#
-#                hue = x.get("colorHue")
-#                sat = x.get("colorSat")
-#                if hue == "150":
-#                    color = 'blue'
-#                elif hue == "80":
-#                    color = 'green'
-#                elif hue == "30":
-#                    color = 'yellow'
-#                elif hue == "10":
-#                    color = 'orange'
-#                elif hue == "210":
-#                    color = 'purple'
-#                elif hue == "0" and sat == "250":
-#                    color = 'red'
-#                else:
-#                    color = 'white'
-#
-#            if deviceslistbyid.__contains__(identifier):
-#                rep_prop = {};
-#                rep_status = {};
-#                name = deviceslistbyid.__getitem__(identifier)[0];
-#                deviceType = deviceslistbyid.__getitem__(identifier)[1];
-#                mfg=deviceslistbyid.__getitem__(identifier)[2];
-#                model = deviceslistbyid.__getitem__(identifier)[2];
-#
-#                rep_status.update({"deviceType": deviceType})
-#                rep_status.update({"mfg":mfg});
-#                rep_status.update({"model":model})
-#
-#                for y, z in x.items():
-#                    if y == "rxTime":
-#                        rep_status.update({y: str(datetime.datetime.utcfromtimestamp(z))})
-#                    elif y == "colorHue":
-#                        rep_status.update(({"color": color}))
-#                    elif y == "colorSat" or y == "colorTemp":
-#                        pass
-#                    else:
-#                        rep_status.update({y: z})
-#
-#
-#                rep_prop.update({name: rep_status})
-#
-#                if name == "" or str(name).__contains__(" "):
-#                  pass
-#                else:
-#                  devicestatus.update(rep_prop)
-#                  devicestatuswithoutrx.update(rep_prop_rx)
-#                  mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + srid,
-#                     str(rep_prop), qos=0)
-#                  mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(rep_prop),qos=1)
-#
-#        # log.info('sensor status published')
-#        return sensor_status(startIndex+count)
-#    except Exception as e:
-#         log.debug("Processing sensor status fails {}".format(e))
-#         return 1
 def sensor_status(startIndex):
    global total_devices,iot_ip,colorTemp
    if (startIndex >= total_devices):
@@ -1189,6 +1014,16 @@ def device_list(startIndex):
 
 
 
+def mqtt_connect():
+    global mqtt_flag
+    log.debug("mqtt connect called")
+    try:
+
+        mqtt_client.connect(iot_hub_name + '.azure-devices.net', 8883,)
+        mqtt_flag=1
+    except Exception as e:
+        log.debug("exception raises {}".format(e))
+        mqtt_flag=0
 
 #If device name is renamed on IOTgateway,the old name reported properties is deleted from the cloud
 
@@ -1320,7 +1155,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                       lightState=j.get("on")
                       lightColor=j.get("color")
                       lightLevel=j.get("level")
-              ldState={"light_state":lightState,"light_color":lightColor,"light_level":lightLevel,"door_state":doorState,"light_temp":colorTemp}
+              ldState={"light_state":lightState,"light_color":lightColor,"light_level":lightLevel,"door_state":doorState,"light_temp":colorTemp,"lock_status":lockstate,"light_status":state}
               self.send_response(200)
               self.send_header('Content-Type', 'application/json')
               self.end_headers()
@@ -1511,7 +1346,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                 self.end_headers()
                                                 self.wfile.write(b'Door Opened')
                                                 # global podState,prevPodState
-                                                lock_door()
+                                                if lockstate == "enabled":
+                                                    lock_door()
+                                                
                                                 # curtime = datetime.datetime.utcnow()
                                                 #
                                                 # lockTime = curtime+ datetime.timedelta(seconds=LOCK_TIMER)
@@ -1528,7 +1365,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                 podState = "Admin In Use"
 
 
-                                                log.debug("Lock timer is {}".format(LOCK_TIMER))
+                                                
                                                 update_pod_state()
                                                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                                                     "{\"pod_state\":\"" + podState + "\"}",
@@ -1727,26 +1564,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                          headers=headers, data=json.dumps(data).encode('utf-8'),
                                                          method="PUT")
                             resp = urllib.request.urlopen(req)
-
-
-                                    # curtime = datetime.datetime.utcnow()
-                                    #
-                                    # lockTime = curtime.second + LOCK_TIMER
-                                    #
-                                    # setTimeout(lockTime, lock_door)
-                            # for k, v in devicelist.items():
-                            #
-                            #     if ("light" in v[2]):
-                            #         id = v[0];
-                            #         data = json.loads(body)
-                            #         log.debug("data is {}".format(data))
-                            #         log.debug("url {}   and id is {}".format(url + iot_ip, id))
-                            #         # req = urllib.request.Request(url+iot_ip + '/devices/' + id, headers=headers, data=json.dumps(data).encode('utf-8'), method="PUT")
-                            #         # resp = urllib.request.urlopen(req)
-                            #         req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
-                            #                                      headers=headers, data=data,
-                            #                                      method="PUT")
-                            #         resp = urllib.request.urlopen(req)
 
 
                             self.send_response(200);
@@ -2296,7 +2113,7 @@ try:
     log.debug("Connecting to hub")
     # mqtt_client.connect(iot_hub_name + '.azure-devices.net', port=8883)
 
-    _thread.start_new_thread(mqtt_client.connect,(iot_hub_name+'.azure-devices.net',8883,))
+    _thread.start_new_thread(mqtt_connect,())
     log.debug("hub connected")
     currentdate = datetime.datetime.now().date()
     dt="786"
@@ -2320,6 +2137,9 @@ try:
                         qos=1)
     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                         "{\"lock_state\":\"" + lockstate + "\"}",
+                        qos=1)
+    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                        "{\"fan_state\":\"" + fanState + "\"}",
                         qos=1)
     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                         "{\"timers\": { \"lock_timer\":\"" + str(LOCK_TIMER) + "\"}}",
