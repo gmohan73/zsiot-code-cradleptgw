@@ -1,3 +1,4 @@
+
 import ssl
 import json
 import time
@@ -380,6 +381,7 @@ def change_pod_state(state):
 
 # Called when the broker responds to our connection request.
 def on_connect(client, userdata, flags, rc):
+    log.info("on connect")
     log.info('Device connected with result code: {}'.format(rc))
 
 
@@ -392,6 +394,7 @@ def on_connect(client, userdata, flags, rc):
         client.subscribe("$iothub/twin/res/#")                                      #cloud send response for twin response under this topic by default
         client.subscribe('$iothub/twin/PATCH/properties/#')
         # client.subscribe('$iothub/twin/GET/#')
+        setTimeout(DESIRED_TIMER,get_desired)
 
 
     except Exception as ex:
@@ -455,7 +458,10 @@ def on_message(client, userdata, msg):
             desired = msgToJson.get("desired")
             if "pod_state" in desired.keys():
                 log.debug("pod state is {}".format(desired.get("pod_state")))
-                podState=desired.get("pod_state")
+                if podState == "Reservation In Use" and desired.get("pod_state") == "Reserved":
+                    pass
+                else:
+                    podState=desired.get("pod_state")
                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                     "{\"pod_state\":\"" + podState + "\"}",
                                     qos=0)
@@ -869,12 +875,14 @@ def sensor_status(startIndex):
                rep_status.update({"mfg":mfg});
                rep_status.update({"model":model})
                rep_status_rx.update({"deviceType": deviceType})
+               rep_status_rx.update({"deviceType": deviceType})
                rep_status_rx.update({"mfg": mfg});
                rep_status_rx.update({"model": model})
 
                for y, z in x.items():
                    if y == "rxTime":
                        rep_status.update({y: str(datetime.datetime.utcfromtimestamp(z))})
+
                    elif y == "colorHue":
                        rep_status.update(({"color": color}))
                        rep_status_rx.update(({"color": color}))
@@ -910,22 +918,22 @@ def sensor_status(startIndex):
 def sensor_status_publish():
     global devicestatuswithoutrx, devicestatustemp,devicestatus
     print("sensor function calls")
-    log.debug("sensor function calls")
+
     sensor_status(0)
     print("sensor status function calls ends")
-    log.debug("sensor status function calls ends")
+
 
     print("device status temp is {}".format(devicestatustemp))
-    #log.debug("device status temp is {}".format(devicestatustemp))
+
     print("device status withoutrx is {}".format(devicestatuswithoutrx))
-    #log.debug("device status withoutrx is {}".format(devicestatuswithoutrx))
+
     if len(devicestatuswithoutrx) == 0:
         print("temp variable empty...publish all")
         mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(devicestatustemp), qos=1)
     for (i, j), (k, l),(m,n) in zip(devicestatuswithoutrx.items(), devicestatustemp.items(),devicestatus.items()):
         if devicestatuswithoutrx.get(i) == devicestatustemp.get(i):
             print("same state")
-            #log.debug("same state")
+
             print("\t\t\t\tdevice rx {}".format(i))
             print("\t\t\t\tdevice status{}".format(m))
         else:
@@ -965,7 +973,7 @@ def get_number_of_devices():
     global total_devices
     global iot_ip
     try:
-        log.debug("get number of devices -- url is {}".format("http://"+iot_ip))
+
         res=urllib.request.urlopen(url+iot_ip + '/devices')
         nres=res.read()
         number_of_devices= json.loads(nres)
@@ -1022,7 +1030,7 @@ def mqtt_connect():
         mqtt_client.connect(iot_hub_name + '.azure-devices.net', 8883,)
         mqtt_flag=1
     except Exception as e:
-        log.debug("exception raises {}".format(e))
+        log.debug("mqtt exception raises {}".format(e))
         mqtt_flag=0
 
 #If device name is renamed on IOTgateway,the old name reported properties is deleted from the cloud
@@ -1044,7 +1052,7 @@ def offline_online_check():
     if conn_state.lower() == "connected":
         if offline == 1:
             log.debug("came back to online")
-            get_desired()
+            # get_desired()
             offline=0
     else:
         log.debug("device is offline")
@@ -1211,7 +1219,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                             content_length = int(self.headers['Content-Length'])
 
 
-                            log.debug("content length is {}".format(content_length))
+
                             body = self.rfile.read(content_length)
                             log.debug("request body - {}".format(body))
 
@@ -2032,6 +2040,14 @@ def setTimeout(seconds,callback,*args):
     t.start()
 
 def get_desired():
+    global podState
+    log.debug("get desired - podState {}".format(podState))
+    # if podState == "Admin In Use" or podState == "Reservation In Use":
+    #     pass
+    # else:
+    #     mqtt_client.subscribe("$iothub/twin/res/#")
+    #     desid = "101"
+    #     mqtt_client.publish('$iothub/twin/GET/?$rid=' + desid, qos=1)
     mqtt_client.subscribe("$iothub/twin/res/#")
     desid = "101"
     mqtt_client.publish('$iothub/twin/GET/?$rid=' + desid, qos=1)
@@ -2177,7 +2193,7 @@ try:
         setInterval(GATEWAY_TIMER,get_iot_ip)
     _thread.start_new_thread(start_server, ())
 
-    setTimeout(DESIRED_TIMER,get_desired)
+    # setTimeout(DESIRED_TIMER,get_desired)
     mqtt_client.loop_forever()
    else:
        log.error("Hub Name,Pod Id,Pod Key is missing")
