@@ -30,6 +30,7 @@ DEVICE_TIMER=350
 CONN_TIMER=12000
 DESIRED_TIMER=10
 LOCK_TIMER=1
+URL_TIMEOUT=40
 #Global variable
 log = AppLogger()
 devicelist={};
@@ -133,16 +134,18 @@ def set_state_color():
         RESERVEINUSECOLOR = "white"
         AVAILINBLINK = 0
         RESERVEINBLINK = 0
-    res = urllib.request.urlopen(url + iot_ip + '/groups')
-    gres = res.read()
-    group_response = json.loads(gres)
-    group_list = group_response.get("groups").get("list")
-    for keys in group_list:
-        log.debug("data is {}".format(keys))
-        if keys.get('name') == 'demo lights':
-            group_id = keys.get('groupId')
-            log.debug("data is {}".format(group_id))
-
+    try:
+        res = urllib.request.urlopen(url + iot_ip + '/groups',timeout=URL_TIMEOUT)
+        gres = res.read()
+        group_response = json.loads(gres)
+        group_list = group_response.get("groups").get("list")
+        for keys in group_list:
+            log.debug("data is {}".format(keys))
+            if keys.get('name') == 'demo lights':
+                group_id = keys.get('groupId')
+                log.debug("data is {}".format(group_id))
+    except Exception as e:
+        log.debug("Exception raises in set_state_color {}".format(e))
 #Rule engine.Based on podState and state table provided by zenspace,it will change the state of sensors
 def group_light_change(colorcode):
    global LIGHTLEV,group_id
@@ -154,7 +157,7 @@ def group_light_change(colorcode):
         req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                      headers=headers, data=data,
                                      method="PUT")
-        resp = urllib.request.urlopen(req)
+        resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
    except Exception as e:
        log.debug("Exception changing Group color {}".format(e))
 
@@ -170,7 +173,7 @@ def group_blink(blinkcount):
             req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                          headers=headers, data=data,
                                          method="PUT")
-            resp = urllib.request.urlopen(req)
+            resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
             dat = {"on": "true"}
             data = json.dumps(dat).encode('utf-8')
             log.debug("Group color data is {}".format(data))
@@ -178,7 +181,7 @@ def group_blink(blinkcount):
             req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                          headers=headers, data=data,
                                          method="PUT")
-            resp = urllib.request.urlopen(req)
+            resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
             count = count + 1
 
 
@@ -202,7 +205,7 @@ def update_pod_state():
                 req = urllib.request.Request(url+iot_ip + '/devices/' + id,
                                              headers=headers, data=data,
                                              method="PUT")
-                resp = urllib.request.urlopen(req)
+                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
     elif podState == "Reserved":
         group_light_change(RESERVECOLOR)
         for k, v in devicelist.items():
@@ -215,7 +218,7 @@ def update_pod_state():
                 req = urllib.request.Request(url+iot_ip + '/devices/' + id,
                                              headers=headers, data=data,
                                              method="PUT")
-                resp = urllib.request.urlopen(req)
+                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
     elif podState == "Admin In Use":
         group_light_change(ADMININUSECOLOR)
         for k, v in devicelist.items():
@@ -229,7 +232,7 @@ def update_pod_state():
                 req = urllib.request.Request(url+iot_ip + '/devices/' + id,
                                              headers=headers, data=data,
                                              method="PUT")
-                resp = urllib.request.urlopen(req)
+                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
     elif podState == "Reservation In Use":
         group_light_change(RESERVEINUSECOLOR)
         for k, v in devicelist.items():
@@ -241,7 +244,7 @@ def update_pod_state():
                 req = urllib.request.Request(url+iot_ip + '/devices/' + id,
                                              headers=headers, data=data,
                                              method="PUT")
-                resp = urllib.request.urlopen(req)
+                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
     elif podState == "TimeOut":
         group_light_change(TIMEOUTCOLOR)
         for k, v in devicelist.items():
@@ -253,7 +256,7 @@ def update_pod_state():
                 req = urllib.request.Request(url+iot_ip + '/devices/' + id,
                                              headers=headers, data=data,
                                              method="PUT")
-                resp = urllib.request.urlopen(req)
+                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
     elif podState == "Available in Next 10 min":
         if AVAILINBLINK == 0:
             group_light_change("white")
@@ -267,7 +270,7 @@ def update_pod_state():
                 req = urllib.request.Request(url+iot_ip + '/devices/' + id,
                                              headers=headers, data=data,
                                              method="PUT")
-                resp = urllib.request.urlopen(req)
+                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
     elif podState == "Unknown":
         group_light_change("white")
         for k, v in devicelist.items():
@@ -280,7 +283,7 @@ def update_pod_state():
                 req = urllib.request.Request(url+iot_ip + '/devices/' + id,
                                              headers=headers, data=data,
                                              method="PUT")
-                resp = urllib.request.urlopen(req)
+                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
     elif podState == "Reserved in Next 10 min":
         if RESERVEINBLINK == 0:
             group_light_change("white")
@@ -306,7 +309,7 @@ def inform_pod_state():
     try:
         data = urllib.parse.urlencode(dat).encode('utf-8')
         req = urllib.request.Request(zen_state_url + pod_id + "/", headers=headers, data=data, method="POST")
-        resp = urllib.request.urlopen(req)
+        resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
         log.debug("informing pod state to salsesforce -- {} ".format(podState))
         log.debug("response from zenStateURL {}".format(json.loads(resp.read())))
 
@@ -694,7 +697,7 @@ def on_message(client, userdata, msg):
                 data = json.dumps(y).encode('utf-8')
                 log.debug("data is {}".format(data))
                 req=urllib.request.Request(url+iot_ip+'/devices/'+id,headers=headers,data=data,method="PUT")
-                resp = urllib.request.urlopen(req)
+                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
                 log.debug("response from gateway -- {}".format(resp))
                 # single_sensor_status(id)
                 start=0
@@ -715,7 +718,7 @@ def gateway_status():
     global iot_ip
     res='';
     try:
-        res=urllib.request.urlopen(url+iot_ip+'/gateway')
+        res=urllib.request.urlopen(url+iot_ip+'/gateway',timeout=URL_TIMEOUT)
         gres=res.read()
         gateway_response= json.loads(gres)
         status=gateway_response.get("gateway").get("info").get("state")
@@ -762,7 +765,7 @@ def pod_status():
 def single_sensor_status(sensor_id):
     global iot_ip
     srid="2000"
-    response = urllib.request.urlopen(url+iot_ip + '/devices/status/'+sensor_id)
+    response = urllib.request.urlopen(url+iot_ip + '/devices/status/'+sensor_id,timeout=URL_TIMEOUT)
     respData = response.read();
     res = json.loads(respData)
     list = res.get("deviceStatus").get("list")
@@ -833,7 +836,7 @@ def sensor_status(startIndex):
    srid='4'
 
    try:
-       response=urllib.request.urlopen(url+iot_ip + '/devices/status?startIndex='+str(startIndex))
+       response=urllib.request.urlopen(url+iot_ip + '/devices/status?startIndex='+str(startIndex),timeout=URL_TIMEOUT)
        respData=response.read();
        res=json.loads(respData)
        list = res.get("deviceStatus").get("list")
@@ -974,7 +977,7 @@ def get_number_of_devices():
     global iot_ip
     try:
 
-        res=urllib.request.urlopen(url+iot_ip + '/devices')
+        res=urllib.request.urlopen(url+iot_ip + '/devices',timeout=URL_TIMEOUT)
         nres=res.read()
         number_of_devices= json.loads(nres)
         total_devices=number_of_devices.get("devices").get("totalDevices")
@@ -988,13 +991,17 @@ def get_number_of_devices():
 #Devices name,type and identifier which all are connected to IOT gateway is stored in dictionary for further references
 def device_list(startIndex):
     global total_devices,iot_ip
-    total_devices = get_number_of_devices()
+    try:
+        total_devices = get_number_of_devices()
+    except Exception as e:
+        log.debug("Exception raises in total_devices {}".format(e))
+        total_devices=0
 
     if (startIndex >= total_devices):
         return 1
 
     try:
-            response=urllib.request.urlopen(url+iot_ip + '/devices/info?startIndex='+str(startIndex))
+            response=urllib.request.urlopen(url+iot_ip + '/devices/info?startIndex='+str(startIndex),timeout=URL_TIMEOUT)
             dres=response.read()
             res=json.loads(dres);
             list = res.get("deviceInfo").get("list")
@@ -1064,7 +1071,7 @@ def lock_door():
     log.debug("locking the door...")
     if devicelist.__contains__("door_lock"):
         id = devicelist.__getitem__("door_lock")[0]
-        response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id)
+        response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
         dres = response.read()
         res = json.loads(dres);
         dstatus = res.get("deviceStatus")
@@ -1083,7 +1090,7 @@ def lock_door():
                 req = urllib.request.Request(url + iot_ip + '/devices/' + id, headers=headers,
                                              data=data,
                                              method="PUT")
-                resp = urllib.request.urlopen(req)
+                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
                 log.debug("door locked")
                 # sensor_status(0)
                 sensor_status_publish()
@@ -1346,7 +1353,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                             data = json.dumps(dat).encode('utf-8')
                                             req = urllib.request.Request(url+iot_ip + '/devices/' + id, headers=headers, data=data,
                                                                          method="PUT")
-                                            resp = urllib.request.urlopen(req)
+                                            resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
 
                                             if (resp.status == 200):
 
@@ -1500,7 +1507,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                             req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                                                          headers=headers, data=json.dumps(data).encode('utf-8'),
                                                                          method="PUT")
-                                            resp = urllib.request.urlopen(req)
+                                            resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
 
                                         elif podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min":
                                             # if prevPodState == "Available" or prevPodState == "Reserved":
@@ -1510,7 +1517,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                     url + iot_ip + '/groups/id/' + str(group_id),
                                                     headers=headers, data=json.dumps(data).encode('utf-8'),
                                                     method="PUT")
-                                                resp = urllib.request.urlopen(req)
+                                                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
                                     else:
                                         if podState == "Available":
                                             group_light_change(AVAILCOLOR)
@@ -1571,7 +1578,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                             req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                                          headers=headers, data=json.dumps(data).encode('utf-8'),
                                                          method="PUT")
-                            resp = urllib.request.urlopen(req)
+                            resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
 
 
                             self.send_response(200);
@@ -1618,7 +1625,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                 data = json.loads(body)
                                 log.debug("data is {}".format(data))
                                 req = urllib.request.Request(url+iot_ip + '/devices/' + id, headers=headers, data=json.dumps(data).encode('utf-8'), method="PUT")
-                                resp = urllib.request.urlopen(req)
+                                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
                                 log.debug(resp.status)
                                 if resp.status == 200:
                                     self.send_response(200);
@@ -1714,7 +1721,7 @@ def verifyAuth(pin):
                             id = devicelist.__getitem__("door_lock")[0]
 
                             # log.debug("door id is {}".format(d))
-                            response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id)
+                            response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
                             dres = response.read()
                             res = json.loads(dres);
                             dstatus = res.get("deviceStatus")
@@ -1733,7 +1740,7 @@ def verifyAuth(pin):
                                 req = urllib.request.Request(url + iot_ip + '/devices/' + id, headers=headers,
                                                              data=data,
                                                              method="PUT")
-                                resp = urllib.request.urlopen(req)
+                                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
                                 if (resp.status == 200):
                                     log.debug("Response status code is 200 ")
                                     global podState
@@ -1800,7 +1807,7 @@ def verifyAuth(pin):
                             id = devicelist.__getitem__("door_lock")[0]
 
                             # log.debug("door id is {}".format(d))
-                            response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id)
+                            response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
                             dres = response.read()
                             res = json.loads(dres);
                             dstatus = res.get("deviceStatus")
@@ -1847,7 +1854,7 @@ def verifyAuth(pin):
                             id = devicelist.__getitem__("door_lock")[0]
 
                             # log.debug("door id is {}".format(d))
-                            response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id)
+                            response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
                             dres = response.read()
                             res = json.loads(dres);
                             dstatus = res.get("deviceStatus")
@@ -1892,7 +1899,7 @@ def verifyAuth(pin):
                       id = devicelist.__getitem__("door_lock")[0]
 
                       # log.debug("door id is {}".format(d))
-                      response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id)
+                      response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
                       dres = response.read()
                       res = json.loads(dres);
                       dstatus = res.get("deviceStatus")
@@ -1933,7 +1940,7 @@ def getAuthentications(pin,count):
 
         data=urllib.parse.urlencode(dat)
         req = urllib.request.Request(zenurl + pod_id + "/?" + data, headers=headers, method="GET")
-        resp = urllib.request.urlopen(req)
+        resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
         zres=json.loads(resp.read())
 
         zreskv = zres.get("result")
@@ -2168,7 +2175,11 @@ try:
                             "{\"gateway_status\":\"" + "No gateway detected" + "\"}", qos=0)
     else:
         start=0
-        total_devices=get_number_of_devices()
+        try:
+            total_devices=get_number_of_devices()
+        except Exception as e:
+            log.debug("IOT gateway not reachable {}".format(e))
+            total_devices=0
 
         network_stats()
         gateway_status()
