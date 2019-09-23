@@ -467,7 +467,7 @@ def on_message(client, userdata, msg):
                     podState=desired.get("pod_state")
                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                     "{\"pod_state\":\"" + podState + "\"}",
-                                    qos=1)
+                                    qos=0)
 
             if "light_state" in desired.keys():
                 state=desired.get("light_state")
@@ -655,16 +655,9 @@ def on_message(client, userdata, msg):
                             pass
                     else:
                         update_pod_state()
-
-
-
-
-
-
-
                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                     "{\"pod_state\":\"" + podState + "\"}",
-                                    qos=1)
+                                    qos=0)
             elif x == "lock_state":
                 log.debug("state of the door updated - {}".format(y))
                 lockstate = y
@@ -1046,7 +1039,7 @@ def mqtt_connect():
     except Exception as e:
         log.debug("mqtt exception raises {}".format(e))
         mqtt_flag=0
-
+    mqtt_client.loop_forever()
 #If device name is renamed on IOTgateway,the old name reported properties is deleted from the cloud
 
 def device_list_manage():
@@ -1307,7 +1300,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                             self.send_response(412)
                             self.end_headers()
                             self.wfile.write(b'BAD Request')
-                            inform_pod_state()
                     else:
                         self.send_response(415)
                         self.end_headers()
@@ -1318,7 +1310,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
                         log.debug(" 412 bad request")
-
 
         elif None != re.search('/admindoorLock', self.path):
 
@@ -1554,7 +1545,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 self.wfile.write(b'Success')
                             else:
-                                self.send_response(403)
+                                self.send_response(415)
                                 self.end_headers()
                                 self.wfile.write(b'BAD Request')
                         # except Exception as e:
@@ -1616,87 +1607,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.send_response(412)
                 self.end_headers()
                 self.wfile.write(b'BAD Request')
-        elif None != re.search('/adminAuth',self.path):
-            log.debug("/adminAuth request {}".format(self.headers))
-            type=self.headers['Content-Type']
-            if 'Content-Type' in self.headers:
-                if type == "application/json":
-                    try:
-                        content_length = int(self.headers['Content-Length'])
-
-                        log.debug("content length is {}".format(content_length))
-                        body = self.rfile.read(content_length)
-                        log.debug("request body - {}".format(body))
-
-                        data = json.loads(body)
-                        if "adminpin" in data.keys() and "adminkey" in data.keys() :
-                            adminPin = data.get("adminpin")
-                            adminkey = data.get("adminkey")
-                            log.debug("adminpin - {},adminkey - {}".format(adminPin, adminkey))
-                            admin_auth = cs.CSClient().get('zenspace/admin_auth')
-                            admin_auth_list = admin_auth.get("data")
-                            if admin_auth_list != None:
-                                availableadminPins = {};
-                                for i in admin_auth_list:
-                                    availableadminPins.update(i)
-                                if adminkey in availableadminPins.keys():
-                                    apin = availableadminPins.get(adminkey)
-                                    if adminPin == apin:
-                                        res={"status":"success"}
-
-                                        self.send_response(200)
-                                        self.send_header('Content-Type', 'application/json')
-                                        self.end_headers()
-                                        self.wfile.write(json.dumps(res).encode('utf-8'))
-                                        log.debug("success")
-
-                                    else:
-                                        res={"status":"UnAuthorized"}
-                                        self.send_response(401)
-                                        self.send_header('Content-Type', 'application/json')
-                                        self.end_headers()
-                                        self.wfile.write(json.dumps(res).encode('utf-8'))
-                                        log.debug(" UnAuthorised")
-                                else:
-                                    res={"status":"UnAuthorized"}
-                                    self.send_response(401)
-                                    self.send_header('Content-Type', 'application/json')
-                                    self.end_headers()
-                                    self.wfile.write(json.dumps(res).encode('utf-8'))
-                                    log.debug(" UnAuthorised")
-                            else:
-                                res={"status":"Admin pin is missing"}
-                                self.send_response(500)
-                                self.send_header('Content-Type', 'application/json')
-                                self.end_headers()
-                                self.wfile.write(json.dumps(res).encode('utf-8'))
-                                log.debug(" Admin pin pissing")
-                        else:
-                            res={"status":"Bad request"}
-                            self.send_response(403)
-                            self.send_header('Content-Type', 'application/json')
-                            self.end_headers()
-                            self.wfile.write(json.dumps(res).encode('utf-8'))
-                            log.debug(" 403 bad request")
-                    except Exception as e:
-                        res={"status":"Bad request"}
-                        self.send_response(412)
-                        self.send_header('Content-Type', 'application/json')
-                        self.end_headers()
-                        self.wfile.write(json.dumps(res).encode('utf-8'))
-                        log.debug(" 412 bad request {}".format(e))
-                else:
-                    res={"status":"Bad request"}
-                    self.send_response(415)
-                    self.send_header('Content-Type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps(res).encode('utf-8'))
-            else:
-                res={"status": "Bad request" }
-                self.send_response(412)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(res).encode('utf-8'))
         elif None != re.search('/sensor/*', self.path):
             sensorName=self.path.split('/')[-1]
             log.debug("headers for /sensor rrequest {}".format(self.headers))
@@ -2163,6 +2073,7 @@ mqtt_client.on_subscribe = on_subscribe
 
 
 try:
+   _thread.start_new_thread(start_server, ())
    get_iot_ip()
    set_state_color()
    log.debug("after state color")
@@ -2224,9 +2135,9 @@ try:
     mqtt_client.tls_insecure_set(False)
 
     log.debug("Connecting to hub")
-    # mqtt_client.connect(iot_hub_name + '.azure-devices.net', port=8883)
+    mqtt_client.connect(iot_hub_name + '.azure-devices.net', port=8883)
 
-    _thread.start_new_thread(mqtt_connect,())
+    # _thread.start_new_thread(mqtt_connect,())
     log.debug("hub connected")
     currentdate = datetime.datetime.now().date()
     dt="786"
@@ -2292,10 +2203,11 @@ try:
         setInterval(SENSOR_TIMER, sensor_status_publish)
         setInterval(CONN_TIMER,network_stats)
         setInterval(GATEWAY_TIMER,get_iot_ip)
-    _thread.start_new_thread(start_server, ())
+    # _thread.start_new_thread(start_server, ())
 
     # setTimeout(DESIRED_TIMER,get_desired)
     mqtt_client.loop_forever()
+
    else:
        log.error("Hub Name,Pod Id,Pod Key is missing")
 

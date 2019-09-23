@@ -7,14 +7,13 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from threading import Thread
 from time import sleep
 import cs
-import settings
 from app_logging import AppLogger
 import re
 log= AppLogger()
 global record
 record = {}
 validverify=''
-activeClients=0
+
 TIMER = 10
 #Starting server http://{}:9001.This server will run forever
 def start_server():
@@ -38,14 +37,6 @@ def start_server():
         print('Stopping Server, Key Board interrupt')
 
     return 0
-
-def active_hotspot_clients():
-    global activeClients
-    clientsList=cs.CSClient().get("/status/hotspot/clients").get("data")
-    if clientsList != None:
-        activeClients=len(clientsList)
-    else:
-        activeClients=0
 
 def verifyAuth(pin,client_ip):
     global iot_ip
@@ -85,17 +76,8 @@ def verifyAuth(pin,client_ip):
                         validverify = "valid"
                         tout=str(timeOut)
                         timeout=datetime.datetime.strptime(tout, "%Y-%m-%d %H:%M:%S")
-                        totalClients = cs.CSClient().get("zenspace/hotspot_clients").get("data")
-                        active_hotspot_clients()
-                        log.debug("Actvie clients were {} , total clienets is {}".format(activeClients,
-                                                                                                 totalClients))
-                        if activeClients < int(totalClients):
-                            record.update({client_ip: [timeIn, timeout, pin]})
-                            return 0
-                        else:
-                            return 2
-
-
+                        record.update({client_ip: [timeIn,timeout , pin]})
+                        return 0
                     else:
                         validverify = "invalid"
             if validverify == "invalid":
@@ -305,29 +287,14 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                             if adminPin == apin:
                                 current_time=datetime.datetime.utcnow().replace(microsecond=0)
                                 timeout=current_time+datetime.timedelta(minutes=int(duration))
-                                active_hotspot_clients()
-                                totalClients = cs.CSClient().get("zenspace/hotspot_clients").get("data")
-                                log.debug("Active clients were {} total clients is {}".format(activeClients,
-                                                                                                      totalClients))
-                                if activeClients < int(totalClients):
-                                    record.update({self.client_address[0]: [current_time, timeout, apin]})
-                                    self.send_response(200)
-                                    self.send_header('Content-type', 'application/json')
-                                    self.send_header('Access-control-Allow-Origin', '*')
-                                    self.send_header('Acess-Control-Allow-Methods', 'GET, POST, OPTIONS')
-                                    self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-with')
-                                    self.end_headers()
-                                    self.wfile.write(bytes(json.dumps({"success": "true"}), 'utf-8'))
-                                else:
-                                    self.send_response(401)
-                                    self.send_header('Content-type', 'application/json')
-                                    self.send_header('Access-control-Allow-Origin', '*')
-                                    self.send_header('Acess-Control-Allow-Methods', 'GET, POST, OPTIONS')
-                                    self.send_header('Access-Control-Allow-Headers',
-                                                     'Content-Type, X-Requested-with')
-                                    self.end_headers()
-                                    self.wfile.write(bytes(json.dumps({"success": "exceed"}), 'utf-8'))
-
+                                record.update({self.client_address[0]: [current_time, timeout, apin]})
+                                self.send_response(200)
+                                self.send_header('Content-type', 'application/json')
+                                self.send_header('Access-control-Allow-Origin', '*')
+                                self.send_header('Acess-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                                self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-with')
+                                self.end_headers()
+                                self.wfile.write(bytes(json.dumps({"success": "true"}), 'utf-8'))
 
 
                             else:
@@ -566,8 +533,6 @@ setInterval(TIMER, checktime)
 
 if __name__ == '__main__':
     try:
-        totalClients = settings.HOTSPOT_CLIENTS
-        cs.CSClient().put("zenspace/hotspot_clients", totalClients)
         start_server()
 
     except Exception as e:
