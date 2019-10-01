@@ -69,8 +69,7 @@ group_id=0
 cloudbeforePodState="Unknown"
 fanState="enabled"
 mqtt_flag=0
-tdflag=0
-tdevent=20
+
 sensorOffline=[]
 #set light state as enabled intitally
 
@@ -955,8 +954,8 @@ def sensor_status(startIndex):
                        try:
                            current_rxtime=datetime.datetime.utcnow().replace(microsecond=0)
                            sensor_rxtime=datetime.datetime.utcfromtimestamp(z)
-                           diff = sensor_rxtime - current_rxtime
-                           log.debug("crxTime -{},srxTime -{},diff.seconds -{}".format(current_rxtime,sensor_rxtime,diff.seconds))
+                           diff = current_rxtime - sensor_rxtime
+                           # log.debug("crxTime -{},srxTime -{},diff.seconds -{}".format(current_rxtime,sensor_rxtime,diff.seconds))
                            if(int(diff.seconds) > 900):
                                if name in sensorOffline:
 
@@ -1070,14 +1069,6 @@ def get_number_of_devices():
         nres=res.read()
         number_of_devices= json.loads(nres)
         total_devices=number_of_devices.get("devices").get("totalDevices")
-        if total_devices == 0:
-            tdflag = tdflag+1
-        if tdflag > tdevent:
-            print("publish")
-            mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                "{\"sensor_alert\": \"sensors not commisioned\" }",
-                                qos=1)
-            tdflag = 0
 
         return total_devices;
     except Exception as e:
