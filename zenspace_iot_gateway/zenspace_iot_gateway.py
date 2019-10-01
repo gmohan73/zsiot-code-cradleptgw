@@ -69,6 +69,8 @@ group_id=0
 cloudbeforePodState="Unknown"
 fanState="enabled"
 mqtt_flag=0
+tdflag=0
+tdevent=20
 sensorOffline=[]
 #set light state as enabled intitally
 
@@ -494,18 +496,41 @@ def on_message(client, userdata, msg):
             if "desired" in msgToJson.keys():
                 print(msgToJson)
                 desired = msgToJson.get("desired")
+
                 if "pod_state" in desired.keys():
+                    beforePodState = podState
+                    log.debug("pod state updated by {}".format(podState))
+                    log.debug("on message first,cloud before pod state -- {} ,cloud state is -- {}".format(cloudbeforePodState,cloudPodState))
+                    if cloudPodState != None or cloudPodState != '':
+                        cloudbeforePodState = cloudPodState
+                    cloudPodState = desired.get("pod_state")
+
+                    log.debug("on message ,cloud before pod state -- {} ,cloud state is -- {}".format(cloudbeforePodState,
+                                                                                                cloudPodState))
                     log.debug("pod state is {}".format(desired.get("pod_state")))
-                    if podState == "Reservation In Use" and desired.get("pod_state") == "Reserved":
+                    if podState == "Admin In Use":
                         pass
+                    elif podState == "Reservation In Use" and desired.get("pod_state") == "Reserved":
+                        pass
+                    elif desired.get("pod_state") == "Reserved in Next 10 min" or desired.get("pod_state") == "Available in Next 10 min":
+                        log.debug("pod state R10 or A10")
+                        if beforePodState == "Reservation In Use":
+                            log.debug("prev pod state is RIU,updating state")
+
+                        else:
+                            log.debug("pod state is R10 or A10 but pod not in use")
+                            pass
                     else:
                         podState=desired.get("pod_state")
+                        update_pod_state()
                     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                         "{\"pod_state\":\"" + podState + "\"}",
                                         qos=1)
 
                 if "light_state" in desired.keys():
                     state=desired.get("light_state")
+                    set_state_color()
+                    update_pod_state()
                 if "fan_state" in desired.keys():
                     fanState=desired.get("fan_state")
                 if "pin_auth" in desired.keys():
@@ -581,8 +606,7 @@ def on_message(client, userdata, msg):
 
                     except Exception as e:
                         log.debug("exception in saving the pin {}".format(e))
-            set_state_color()
-            update_pod_state()
+
         except Exception as e:
             log.debug("Exception raises in processing read desired properties -{}".format(e))
 
@@ -929,10 +953,10 @@ def sensor_status(startIndex):
                    if y == "rxTime":
                        rep_status.update({y: str(datetime.datetime.utcfromtimestamp(z))})
                        try:
-                           current_rxtime=datetime.datetime.utcnow()
+                           current_rxtime=datetime.datetime.utcnow().replace(microsecond=0)
                            sensor_rxtime=datetime.datetime.utcfromtimestamp(z)
                            diff = sensor_rxtime - current_rxtime
-
+                           log.debug("crxTime -{},srxTime -{},diff.seconds -{}".format(current_rxtime,sensor_rxtime,diff.seconds))
                            if(int(diff.seconds) > 900):
                                if name in sensorOffline:
 
@@ -1038,7 +1062,7 @@ def network_stats():
 
 #Total devices connected to IOT gateway
 def get_number_of_devices():
-    global total_devices
+    global total_devices,tdflag,tdevent
     global iot_ip
     try:
 
@@ -1046,6 +1070,15 @@ def get_number_of_devices():
         nres=res.read()
         number_of_devices= json.loads(nres)
         total_devices=number_of_devices.get("devices").get("totalDevices")
+        if total_devices == 0:
+            tdflag = tdflag+1
+        if tdflag > tdevent:
+            print("publish")
+            mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                "{\"sensor_alert\": \"sensors not commisioned\" }",
+                                qos=1)
+            tdflag = 0
+
         return total_devices;
     except Exception as e:
 
@@ -1433,7 +1466,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                             adminPin = data.get("adminpin")
                             adminkey=data.get("adminkey")
                             duration=data.get("duration")
-
+                            adminpin=adminPin
+                            adminKey=adminkey
+                            duraTion=duration
                             admin_auth=cs.CSClient().get('zenspace/admin_auth')
                             admin_auth_list=admin_auth.get("data")
                             if admin_auth_list != None:
@@ -1789,7 +1824,70 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.send_response(412)
                 self.end_headers()
                 self.wfile.write(b'BAD Request')
+        elif None != re.search('/adminAuth', self.path):
+            log.debug("/adminAuth request {}".format(self.headers))
+            type = self.headers['Content-Type']
+            if 'Content-Type' in self.headers:
+                if type == "application/json":
+                    try:
+                        content_length = int(self.headers['Content-Length'])
 
+                        log.debug("content length is {}".format(content_length))
+                        body = self.rfile.read(content_length)
+                        log.debug("request body - {}".format(body))
+
+                        data = json.loads(body)
+                        if "adminpin" in data.keys() and "adminkey" in data.keys():
+                            adminPin = data.get("adminpin")
+                            adminkey = data.get("adminkey")
+                            log.debug("adminpin - {},adminkey - {}".format(adminPin, adminkey))
+                            admin_auth = cs.CSClient().get('zenspace/admin_auth')
+                            admin_auth_list = admin_auth.get("data")
+                            if admin_auth_list != None:
+                                availableadminPins = {};
+                                for i in admin_auth_list:
+                                    availableadminPins.update(i)
+                                if adminkey in availableadminPins.keys():
+                                    apin = availableadminPins.get(adminkey)
+                                    if adminPin == apin:
+                                        self.send_response(200)
+                                        self.end_headers()
+                                        self.wfile.write(b'Success')
+                                        log.debug("Success")
+
+                                    else:
+                                        self.send_response(401)
+                                        self.end_headers()
+                                        self.wfile.write(b'UnAuthorized')
+                                        log.debug(" UnAuthorised")
+                                else:
+                                    self.send_response(401)
+                                    self.end_headers()
+                                    self.wfile.write(b'UnAuthorized')
+                                    log.debug(" UnAuthorised")
+                            else:
+                                self.send_response(500)
+                                self.end_headers()
+                                self.wfile.write(b'Admin pin is missing')
+                                log.debug(" Admin pin pissing")
+                        else:
+                            self.send_response(403)
+                            self.end_headers()
+                            self.wfile.write(b'BAD Request')
+                            log.debug(" 403 bad request")
+                    except Exception as e:
+                        self.send_response(412)
+                        self.end_headers()
+                        self.wfile.write(b'BAD Request')
+                        log.debug(" 412 bad request {}".format(e))
+                else:
+                    self.send_response(415)
+                    self.end_headers()
+                    self.wfile.write(b'BAD Request')
+            else:
+                self.send_response(412)
+                self.end_headers()
+                self.wfile.write(b'BAD Request')
         else:
             log.debug("Invalid url");
             self.send_response(404);
