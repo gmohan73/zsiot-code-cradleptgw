@@ -69,8 +69,12 @@ group_id=0
 cloudbeforePodState="Unknown"
 fanState="enabled"
 mqtt_flag=0
-
+tdflag=0
+tdevent=20
 sensorOffline=[]
+offlineDevices=[];
+intrusionDetection=0;
+intrusionDetectionTime=datetime.datetime.utcnow().replace(microsecond=0);
 #set light state as enabled intitally
 
 #Header for gateway request
@@ -149,6 +153,52 @@ def set_state_color():
 
     except Exception as e:
         log.debug("Exception raises in set_state_color {}".format(e))
+
+#Get group info
+def group():
+    global group_id,groupnames,gnflag,offlineDevices
+    gnames=[]
+    try:
+        res = urllib.request.urlopen(url + iot_ip + '/groups', timeout=URL_TIMEOUT)
+        gres = res.read()
+        group_response = json.loads(gres)
+        group_list = group_response.get("groups").get("list")
+
+        for keys in group_list:
+            gnames.append(keys.get('name'))
+            if keys.get('name') == 'demo lights':
+                group_id = keys.get('groupId')
+                locationid=keys.get('locationId')
+                if locationid > 1:
+                    if "demolocation" in offlineDevices:
+                        offlineDevices.remove("demolocation")
+                        log.debug("light group location id is greater than 1")
+                else:
+                    if "demolocation" in offlineDevices:
+                        pass
+                    else:
+                        offlineDevices.append("demolocation")
+                        data = {"lightgroup": "Group for light is miscommisioned"}
+                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'),
+                                            qos=1)
+        if "demo lights" not in gnames:
+            log.debug("group is not present")
+            if "demo" in offlineDevices:
+                pass
+            else:
+                log.debug("publish the group is not commisioned");
+                offlineDevices.append("demo")
+                data={"lightgroup":"Group for light is not commisioned"}
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'), qos=1)
+        else:
+            log.debug("group is present ")
+            if "demo" in offlineDevices:
+                offlineDevices.remove("demo")
+
+    except Exception as e:
+        log.debug("Exception raises in set_state_color {}".format(e))
+
+
 #Rule engine.Based on podState and state table provided by zenspace,it will change the state of sensors
 def group_light_change(colorcode):
    global LIGHTLEV,group_id
@@ -414,7 +464,8 @@ def change_pod_state(state):
 
 
 def on_log(client,userdata,level,buf):
-    log.debug("mqtt connection - {}".format(buf))
+     # log.debug("mqtt connection - {}".format(buf))
+     pass
 
 
 # Called when the broker responds to our connection request.
@@ -895,7 +946,7 @@ def single_sensor_status(sensor_id):
 #If the sensor has color properties,color is determined by colorHue and colorSat of that
 #Reported property for sensors is created like the following format { ":device name" : { ":property key" : ":value" } }
 def sensor_status(startIndex):
-   global total_devices,iot_ip,colorTemp
+   global total_devices,iot_ip,colorTemp,podState,intrusionDetection,beforePodState,intrusionDetectionTime
    try:
        if (startIndex >= total_devices):
            return 1
@@ -929,6 +980,35 @@ def sensor_status(startIndex):
                    color = 'red'
                else:
                    color = 'white'
+               cTime=datetime.datetime.utcnow().replace(microsecond=0)
+               diff = cTime - intrusionDetectionTime
+               diffSeconds=diff.seconds;
+               # log.debug("cTime - {} ,inTime - {} , diff - {}".format(cTime,intrusionDetectionTime,diffSeconds))
+               if intrusionDetection ==1 and ( podState == "Available" or podState == "Reserved" ) and int(diffSeconds) < 900 :
+                   log.debug("intrusion detected,don't trigger color change")
+                   pass
+               elif intrusionDetection ==1 and (podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min") and int(diffSeconds) < 900:
+                   if beforePodState == "Available" or beforePodState == "Reserved":
+                        log.debug("intrusion detected,don't trigger color change")
+                        pass
+               else:
+
+                   if podState == "Available" and color != AVAILCOLOR :
+                       log.debug("trigger color change-available")
+                       group_light_change(AVAILCOLOR)
+                   elif podState == "Reserved" and color != RESERVECOLOR:
+                       log.debug("trigger color change-reserved")
+                       group_light_change(RESERVECOLOR)
+                   elif podState == "Admin In Use" and color != ADMININUSECOLOR:
+                       log.debug("trigger color change-admin in use")
+                       group_light_change(ADMININUSECOLOR)
+                   elif podState =="Reservation In Use" and color != RESERVEINUSECOLOR:
+                       log.debug("trigger color change-reservation in use")
+                       group_light_change(RESERVEINUSECOLOR)
+                   elif podState == "TimeOut" and color != TIMEOUTCOLOR:
+                       log.debug("trigger color change-timeout")
+                       group_light_change(TIMEOUTCOLOR)
+
 
            if deviceslistbyid.__contains__(identifier):
                rep_prop = {};
@@ -967,8 +1047,9 @@ def sensor_status(startIndex):
                                    data={nameAlert: "sensor unreachable"}
                                    mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'), qos=1)
                            else:
-                               log.debug('sensor came back to online')
+
                                if name in sensorOffline:
+                                   log.debug('sensor came back to online')
                                    sensorOffline.remove(name)
                        except Exception as e:
                            log.debug("Exception raised in sensor offline publishing state {}".format(e))
@@ -981,7 +1062,10 @@ def sensor_status(startIndex):
                    elif y == "colorSat":
                        pass
                    elif y == "colorTemp":
+
                        colorTemp=z
+                       rep_status_rx.update({"colorTemp": colorTemp})
+                       rep_status.update({"colrTemp": z})
 
                    else:
                        rep_status.update({y: z})
@@ -1008,6 +1092,7 @@ def sensor_status(startIndex):
         return 1
 
 def sensor_status_publish():
+    # log.debug("sensor status publish")
     global devicestatuswithoutrx, devicestatustemp,devicestatus
     try:
 
@@ -1017,22 +1102,45 @@ def sensor_status_publish():
 
         if len(devicestatuswithoutrx) == 0:
 
-            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(devicestatustemp), qos=2)
+            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(devicestatus), qos=2)
         for (i, j), (k, l),(m,n) in zip(devicestatuswithoutrx.items(), devicestatustemp.items(),devicestatus.items()):
             if devicestatuswithoutrx.get(i) == devicestatustemp.get(i):
                 print("same state")
 
 
             else:
+                dat = {m: n}
+                log.debug(" j is {}".format(j) )
+                log.debug(" l is {}".format(l))
+                if "motion" in j.keys() and "motion" in l.keys():
 
-                log.debug("different state")
-                print("i is {} , j is {}".format(i,j))
-                log.debug("i is {} , j is {}".format(i,j))
-                # dat={i:j}
-                dat={m:n}
+                    log.debug("motion sensor..")
+                    jtemp = j.get("temperature")
+                    ltemp=l.get("temperature")
+                    jwithoutTemp=j.copy()
+                    lwithoutTemp=l.copy()
+                    jwithoutTemp.pop("temperature")
+                    lwithoutTemp.pop("temperature")
 
-                print("\t\t\t\tdevice status{}".format(devicestatus))
-                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
+                    difftemp=float(jtemp) - float(ltemp)
+                    difftemp =  -1 * round(difftemp);
+                    if difftemp < 1:
+                        pass
+
+                    if jwithoutTemp == lwithoutTemp:
+                        log.debug("rest also same")
+                    else:
+                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
+
+                else:
+                    log.debug("different state")
+                    print("i is {} , j is {}".format(i,j))
+                    log.debug("i is {} , j is {}".format(i,j))
+                    # dat={i:j}
+
+
+                    print("\t\t\t\tdevice status{}".format(devicestatus))
+                    mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
 
         devicestatustemp = devicestatuswithoutrx.copy()
 
@@ -1061,7 +1169,7 @@ def network_stats():
 
 #Total devices connected to IOT gateway
 def get_number_of_devices():
-    global total_devices,tdflag,tdevent
+    global total_devices,tdflag,tdevent,offlineDevices
     global iot_ip
     try:
 
@@ -1069,6 +1177,23 @@ def get_number_of_devices():
         nres=res.read()
         number_of_devices= json.loads(nres)
         total_devices=number_of_devices.get("devices").get("totalDevices")
+        if total_devices == 0:
+            tdflag = tdflag+1
+        else:
+            tdflag = 0
+            if "totalDevices" in offlineDevices:
+                log.debug("total devices count greater than 0 ")
+                offlineDevices.remove("totalDevices")
+        if tdflag > tdevent:
+            print("publish")
+            if "totalDevices" in offlineDevices:
+                pass
+            else:
+                offlineDevices.append("totalDevices")
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                "{\"SENSORS_ALERT\": \"sensors are not commisioned\" }",
+                                qos=1)
+
 
         return total_devices;
     except Exception as e:
@@ -1145,6 +1270,7 @@ def device_list_manage():
 
     except Exception as e:
         log.debug("Exception - device list manage - {}".format(e))
+    group()
 def offline_online_check():
     global offline
     try:
@@ -1308,12 +1434,51 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
 
+    def do_PUT(self):
+        log.debug("PUT request")
+        erid="2000"
+        if None != re.search('/eventhub', self.path):
+            if 'Content-Type' in self.headers:
+                type = self.headers['Content-Type']
+                if type == "application/json":
+                    try:
+                        content_length = int(self.headers['Content-Length'])
+
+                        body = self.rfile.read(content_length)
+                        data=json.loads(body)
+                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
+
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(b'Success')
+                    except Exception as e:
+                        res = "412,bad request-{}".format(e)
+                        log.debug("Exception raised in /doorLock post request {}".format(e))
+                        self.send_response(412)
+                        self.end_headers()
+                        self.wfile.write(b'BAD Request')
+                else:
+                        res="415,bad request"
+                        self.send_response(415)
+                        self.end_headers()
+                        self.wfile.write(b'BAD Request')
+                        log.debug(" 415 bad request")
+            else:
+                        res="412 ,Bad request"
+                        self.send_response(412)
+                        self.end_headers()
+                        self.wfile.write(b'BAD Request')
+                        log.debug(" 412 bad request")
+        else:
+            log.debug("Invalid url");
+            self.send_response(404);
+            self.end_headers()
 
 
 
     def do_POST(self):
         log.debug("POST request")
-        global podState, prevPodState,group_id,state,beforePodState
+        global podState, prevPodState,group_id,state,beforePodState,intrusionDetection,intrusionDetectionTime
         if None != re.search('/doorLock', self.path):
 
 
@@ -1653,6 +1818,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                         log.debug("hval is {}".format(hval))
                                         if podState == "Available" or podState == "Reserved":
                                             log.debug("change color to red")
+                                            intrusionDetection=1
+                                            intrusionDetectionTime=datetime.datetime.utcnow().replace(microsecond=0)
                                             req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                                                          headers=headers, data=json.dumps(data).encode('utf-8'),
                                                                          method="PUT")
@@ -1661,7 +1828,9 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                         elif podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min":
                                             # if prevPodState == "Available" or prevPodState == "Reserved":
                                             if beforePodState == "Available" or beforePodState == "Reserved":
-
+                                                intrusionDetection=1
+                                                intrusionDetectionTime = datetime.datetime.utcnow().replace(
+                                                    microsecond=0)
                                                 req = urllib.request.Request(
                                                     url + iot_ip + '/groups/id/' + str(group_id),
                                                     headers=headers, data=json.dumps(data).encode('utf-8'),
@@ -1669,8 +1838,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                 resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
                                     else:
                                         if podState == "Available":
+                                            intrusionDetection=0
                                             group_light_change(AVAILCOLOR)
                                         elif podState == "Reserved":
+                                            intrusionDetection=0
                                             group_light_change(RESERVECOLOR)
 
                                         # if podState == "Available in Next 10 min" and prevPodState == "Reserved":
@@ -1681,10 +1852,13 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                         #     group_light_change(RESERVECOLOR)
 
                                         if podState == "Available in Next 10 min" and beforePodState == "Reserved":
+                                            intrusionDetection=0
                                             group_light_change(RESERVECOLOR)
                                         elif podState == "Reserved in Next 10 min" and beforePodState == "Available":
+                                            intrusionDetection=0
                                             group_light_change(AVAILCOLOR)
                                         elif podState == "Reserved in Next 10 min" and beforePodState == "Reserved":
+                                            intrusionDetection=0
                                             group_light_change(RESERVECOLOR)
 
 
@@ -1698,6 +1872,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 self.wfile.write(b'BAD Request')
                         except Exception as e:
+                            intrusionDetection=0
                             log.debug("exception raised in /pod/intrusion request {}".format(e))
                             self.send_response(412)
                             self.end_headers()
@@ -2266,7 +2441,10 @@ def setTimeout(seconds,callback,*args):
 
 def get_desired():
     try:
+
         global podState
+        mqtt_client.publish('devices/' + pod_id + '/messages/events/', "{\"ZenServer\":\"zenspace back to online\"}",
+                            qos=1)
         log.debug("get desired - podState {}".format(podState))
         mqtt_client.subscribe("$iothub/twin/res/#")
         desid = "101"
@@ -2385,6 +2563,8 @@ try:
                         "{\"timers\": { \"lock_timer\":\"" + str(LOCK_TIMER) + "\"}}",
                         qos=1)
 
+    mqtt_client.publish('devices/' + pod_id + '/messages/events/',    "{\"ZenServer\":\"zenspace server started\"}",
+                        qos=1)
     # inform_pod_state()
 
     if iot_ip == '' :
