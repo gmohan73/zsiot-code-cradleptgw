@@ -25,7 +25,7 @@ import re
 #Timers for reporting status to cloud in seconds
 GATEWAY_TIMER=300
 POD_TIMER=60
-SENSOR_TIMER=30
+SENSOR_TIMER=60
 DEVICE_TIMER=350
 CONN_TIMER=12000
 DESIRED_TIMER=10
@@ -983,7 +983,7 @@ def sensor_status(startIndex):
                cTime=datetime.datetime.utcnow().replace(microsecond=0)
                diff = cTime - intrusionDetectionTime
                diffSeconds=diff.seconds;
-               # log.debug("cTime - {} ,inTime - {} , diff - {}".format(cTime,intrusionDetectionTime,diffSeconds))
+               # log.debug("name -{} ,cTime - {} ,inTime - {} , diff - {}".format(name,cTime,intrusionDetectionTime,diffSeconds))
                if intrusionDetection ==1 and ( podState == "Available" or podState == "Reserved" ) and int(diffSeconds) < 900 :
                    log.debug("intrusion detected,don't trigger color change")
                    pass
@@ -1035,21 +1035,24 @@ def sensor_status(startIndex):
                            current_rxtime=datetime.datetime.utcnow().replace(microsecond=0)
                            sensor_rxtime=datetime.datetime.utcfromtimestamp(z)
                            diff = current_rxtime - sensor_rxtime
-                           # log.debug("crxTime -{},srxTime -{},diff.seconds -{}".format(current_rxtime,sensor_rxtime,diff.seconds))
-                           if(int(diff.seconds) > 900):
+                           log.debug("name - {} ,crxTime -{},srxTime -{},diff.seconds -{}".format(name,current_rxtime,sensor_rxtime,diff.seconds))
+                           log.debug("sensorOffline - {}".format(sensorOffline))
+                           if(int(diff.seconds) >= 900):
                                if name in sensorOffline:
-
-                                   pass
+                                 pass
                                else:
-                                   log.debug("{} sensor unreachable".format(name))
-                                   sensorOffline.append(name)
-                                   nameAlert = name+"_alert"
-                                   data={nameAlert: "sensor unreachable"}
-                                   mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'), qos=1)
+                                   if name == "" or str(name).__contains__(" "):
+                                       pass
+                                   else:
+                                       log.debug("{} sensor unreachable".format(name))
+                                       sensorOffline.append(name)
+                                       nameAlert = name+"_alert"
+                                       data={nameAlert: "sensor unreachable"}
+                                       mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'), qos=1)
                            else:
 
                                if name in sensorOffline:
-                                   log.debug('sensor came back to online')
+                                   log.debug('sensor came back to online {}'.format(name))
                                    sensorOffline.remove(name)
                        except Exception as e:
                            log.debug("Exception raised in sensor offline publishing state {}".format(e))
@@ -1082,7 +1085,7 @@ def sensor_status(startIndex):
                  devicestatus.update(rep_prop)
                  devicestatuswithoutrx.update(rep_prop_rx)
                  mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + srid,
-                    str(rep_prop), qos=1)
+                    str(rep_prop), qos=0)
                  # mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(rep_prop),qos=1)
 
        # log.info('sensor status published')
@@ -1155,7 +1158,7 @@ def network_stats():
     try:
         conn_type=cs.CSClient().get("/status/wan/primary_device").get("data")
         mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
-                            "{\"conn_type\":\"" + conn_type + "\"}", qos=1)
+                            "{\"conn_type\":\"" + conn_type + "\"}", qos=0)
 
         wan_in=cs.CSClient().get("/status/stats/usage/wan_in").get("data");
         wan_out=cs.CSClient().get("/status/stats/usage/wan_out").get("data");
@@ -1370,6 +1373,15 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 log.debug("Exception occurs in get /sensor/info --{}".format(e))
                 self.send_response(503)
                 self.end_headers()
+        # elif None != re.search('/pod/id',self.path):
+        #     log.debug("/pod/id - {}".format(pod_id))
+        #     data={"podId":pod_id}
+        #     self.send_response(200)
+        #     self.send_header('Content-Type', 'application/json')
+        #     self.end_headers()
+        #     s = json.dumps(data).encode('utf-8')
+        #     self.wfile.write(s)
+
         elif None != re.search('/pod/state',self.path):
 
             log.debug("pod state is {}".format(podState))
