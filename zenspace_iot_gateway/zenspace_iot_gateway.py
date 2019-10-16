@@ -29,6 +29,7 @@ SENSOR_TIMER=60
 DEVICE_TIMER=350
 CONN_TIMER=12000
 DESIRED_TIMER=10
+HEALTH_TIMER=1800
 LOCK_TIMER=1
 URL_TIMEOUT=40
 #Global variable
@@ -72,6 +73,7 @@ mqtt_flag=0
 tdflag=0
 tdevent=20
 sensorOffline=[]
+unreachable_host = []
 offlineDevices=[];
 intrusionDetection=0;
 intrusionDetectionTime=datetime.datetime.utcnow().replace(microsecond=0);
@@ -1290,7 +1292,63 @@ def offline_online_check():
         log.debug("Exception - offline online check {} ".format(e))
 
 
+def health_monitioring():
+    global unreachable_host
+    log.debug("unreachable hosts = {}".format(unreachable_host))
+    try:
+        mac_list = cs.CSClient().get('/config/dhcpd/reserve').get('data')
 
+        if (mac_list != None):
+            if (len(mac_list) > 0):
+                if "all" in unreachable_host:
+                    unreachable_host.remove("all")
+                for item in mac_list:
+                    host = item["ip_address"]
+
+                    cstore = cs.CSClient()
+                    cstore.put('control/ping/start/host', host)
+                    cstore.put('control/ping/start/size', 64)
+
+                    print('ping host: %s', host)
+                    result = {}
+                    try_count = 0;
+
+                    while try_count < 3:
+                        result = cstore.get('control/ping')
+                        if result.get('data') and result.get('data').get('status') in ["error", "done"]:
+                            break
+                        time.sleep(5)
+                        try_count += 1
+
+                    error_str = ""
+                    if try_count == 3 or not result.get('data') or result.get('data').get('status') != "done":
+                        error_str = "An error occurred"
+                        if host in unreachable_host:
+                          pass
+                        else:
+                            unreachable_host.append(host)
+                            mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                                "{\"health_monitor\": \""+host + " is unreachable \" }",
+                                                qos=1)
+                    if result.get('data').get('status') == "done":
+                        if host in unreachable_host:
+                            unreachable_host.remove(host)
+
+                    log.debug("ping result:  FOR host %s  %s\n%s", host, error_str, result['data']['result'])
+        else:
+            if "all" in unreachable_host:
+                pass
+            else:
+                unreachable_host.append("all")
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                    "{\"health_monitor\": \"MAC address is not found\" }",
+                                    qos=1)
+
+            # log.info("ping result: %s\n%s", error_str)
+
+        log.debug(" UnReachable host - {}".format(unreachable_host))
+    except Exception as e:
+        log.debug("Exception raised in health monitoring = {}".format(e))
 def lock_door():
     try:
         log.debug("locking the door...")
@@ -1373,14 +1431,14 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 log.debug("Exception occurs in get /sensor/info --{}".format(e))
                 self.send_response(503)
                 self.end_headers()
-        # elif None != re.search('/pod/id',self.path):
-        #     log.debug("/pod/id - {}".format(pod_id))
-        #     data={"podId":pod_id}
-        #     self.send_response(200)
-        #     self.send_header('Content-Type', 'application/json')
-        #     self.end_headers()
-        #     s = json.dumps(data).encode('utf-8')
-        #     self.wfile.write(s)
+        elif None != re.search('/pod/id',self.path):
+            log.debug("/pod/id - {}".format(pod_id))
+            data={"podId":pod_id}
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            s = json.dumps(data).encode('utf-8')
+            self.wfile.write(s)
 
         elif None != re.search('/pod/state',self.path):
 
@@ -2590,6 +2648,7 @@ try:
             log.debug("IOT gateway not reachable {}".format(e))
             total_devices=0
         try:
+            health_monitioring()
             network_stats()
             gateway_status()
 
@@ -2616,6 +2675,7 @@ try:
         setInterval(SENSOR_TIMER, sensor_status_publish)
         setInterval(CONN_TIMER,network_stats)
         setInterval(GATEWAY_TIMER,get_iot_ip)
+        setInterval(HEALTH_TIMER,health_monitioring)
     # _thread.start_new_thread(start_server, ())
 
     # setTimeout(DESIRED_TIMER,get_desired)
