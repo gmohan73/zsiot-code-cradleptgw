@@ -79,6 +79,8 @@ intrusionDetection=0;
 intrusionDetectionTime=datetime.datetime.utcnow().replace(microsecond=0);
 #set light state as enabled intitally
 
+ports=settings.PORTS
+
 #Header for gateway request
 headers = {}
 headers['content-type'] = 'application/json'
@@ -95,6 +97,8 @@ path_to_root_cert = os.path.join(os.getcwd(), 'certs.cer')
 hubName__j=cs.CSClient().get('/config/system/asset_id')
 podId__j=cs.CSClient().get('/config/system/system_id')
 podKey__j=cs.CSClient().get('/config/system/desc')
+
+ports=settings.PORTS
 
 
 # MS Azure IoT Hub name
@@ -983,7 +987,10 @@ def sensor_status(startIndex):
                else:
                    color = 'white'
                cTime=datetime.datetime.utcnow().replace(microsecond=0)
-               diff = cTime - intrusionDetectionTime
+               if cTime > intrusionDetectionTime:
+                diff = cTime - intrusionDetectionTime
+               else:
+                diff = intrusionDetectionTime - cTime
                diffSeconds=diff.seconds;
                # log.debug("name -{} ,cTime - {} ,inTime - {} , diff - {}".format(name,cTime,intrusionDetectionTime,diffSeconds))
                if intrusionDetection ==1 and ( podState == "Available" or podState == "Reserved" ) and int(diffSeconds) < 900 :
@@ -1036,7 +1043,13 @@ def sensor_status(startIndex):
                        try:
                            current_rxtime=datetime.datetime.utcnow().replace(microsecond=0)
                            sensor_rxtime=datetime.datetime.utcfromtimestamp(z)
-                           diff = current_rxtime - sensor_rxtime
+                           if current_rxtime > sensor_rxtime:
+                               print("crxtime is greater")
+                               diff = current_rxtime - sensor_rxtime
+                           else:
+                               print("sensor rxtime is greater")
+                               diff = sensor_rxtime - current_rxtime
+
                            log.debug("name - {} ,crxTime -{},srxTime -{},diff.seconds -{}".format(name,current_rxtime,sensor_rxtime,diff.seconds))
                            log.debug("sensorOffline - {}".format(sensorOffline))
                            if(int(diff.seconds) >= 900):
@@ -1364,7 +1377,13 @@ def lock_door():
             for l in list:
                 lctimestamp = l.get("rxTime")
                 lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
-                diff = currenttime - lctime
+                if currenttime > lctime:
+
+                    diff = currenttime - lctime
+                else:
+
+                    diff = lctime - currenttime
+
                 diffsec = diff.seconds
                 if (diffsec < 900):
                     dat = {"on": "true"}
@@ -2189,7 +2208,13 @@ def verifyAuth(pin):
                                 for l in list:
                                     lctimestamp = l.get("rxTime")
                                     lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
-                                    diff = currenttime - lctime
+                                    if currenttime > lctime:
+                                        print("crxtime is greater")
+                                        diff = currenttime - lctime
+                                    else:
+                                        print("sensor rxtime is greater")
+                                        diff = lctime - currenttime
+
                                     diffsec=diff.seconds
 
                                     dat = {"on":"false"}
@@ -2212,8 +2237,14 @@ def verifyAuth(pin):
                                                             "{\"pod_state\":\"" + podState + "\"}",
                                                             qos=1)
                                         currentPin = pin
+                                        if curtime > timeOut:
+                                            print("crxtime is greater")
+                                            diff = curtime-timeOut
+                                        else:
+                                            print("sensor rxtime is greater")
+                                            diff = timeOut-curtime
 
-                                        diff = timeOut - curtime
+
 
                                         lock_door()
                                         # lockTime = curtime.second + LOCK_TIMER
@@ -2275,7 +2306,14 @@ def verifyAuth(pin):
                                 for l in list:
                                     lctimestamp = l.get("rxTime")
                                     lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
-                                    diff = currenttime - lctime
+                                    if currenttime > lctime:
+                                        print("crxtime is greater")
+                                        diff = currenttime - lctime
+                                    else:
+                                        print("sensor rxtime is greater")
+                                        diff = lctime - currenttime
+
+
                                     diffsec = diff.seconds
                                     if (diffsec < 900):
                                         pass
@@ -2322,7 +2360,14 @@ def verifyAuth(pin):
                                 for l in list:
                                     lctimestamp = l.get("rxTime")
                                     lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
-                                    diff = currenttime - lctime
+                                    if currenttime > lctime:
+                                        print("crxtime is greater")
+                                        diff = currenttime - lctime
+                                    else:
+                                        print("sensor rxtime is greater")
+                                        diff = lctime-currenttime
+
+
                                     diffsec = diff.seconds
                                     if (diffsec < 900):
                                         pass
@@ -2367,7 +2412,10 @@ def verifyAuth(pin):
                           for l in list:
                               lctimestamp = l.get("rxTime")
                               lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
-                              diff = currenttime - lctime
+                              if currenttime > lctime:
+                                diff = currenttime - lctime
+                              else:
+                                  diff = lctime - currenttime
                               diffsec = diff.seconds
                               if (diffsec < 900):
                                   pass
