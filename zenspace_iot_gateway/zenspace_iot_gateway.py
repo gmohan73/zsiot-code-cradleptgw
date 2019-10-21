@@ -1018,7 +1018,7 @@ def change_to_state_color(startIndex):
                         log.debug("intrusion detected,don't trigger color change")
                         pass
                 else:
-                    log.debug("color is - {}".format(color))
+
                     if podState == "Available" and color != AVAILCOLOR:
                         log.debug("trigger color change-available")
                         group_light_change(AVAILCOLOR)
@@ -1242,13 +1242,35 @@ def sensor_status_publish():
                     lwithoutTemp=l.copy()
                     jwithoutTemp.pop("temperature")
                     lwithoutTemp.pop("temperature")
+                    if "batteryLevel" in j.keys() and "batteryLevel" in l.keys():
+                        jbat = j.get("batteryLevel")
+                        lbat = l.get("batteryLevel")
+                        jwithoutBat=jwithoutTemp.copy()
+                        lwithoutBat=lwithoutTemp.copy()
+                        jwithoutBat.pop("batteryLevel")
+                        lwithoutBat.pop("batteryLevel")
 
-                    difftemp=float(jtemp) - float(ltemp)
-                    difftemp =  -1 * round(difftemp);
+                        if int(jbat) > int(lbat):
+                            diffbat=int(jbat)-int(lbat)
+                        else:
+                            diffbat=int(lbat)-int(jbat)
+                        log.debug("jbat {} ,lbat {} ,diffbat {}".format(jbat,lbat,diffbat))
+                        if diffbat > 5:
+                            log.debug("battery level differnece grater than 5")
+
+                            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
+
+                    if int(jtemp) > int(ltemp):
+                        difftemp=int(jtemp) - int(ltemp)
+                    else:
+                        difftemp = int(ltemp) - int(jtemp)
+
                     if difftemp < 1:
                         pass
+                    else:
+                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
 
-                    if jwithoutTemp == lwithoutTemp:
+                    if jwithoutBat == lwithoutBat:
                         log.debug("rest also same")
                     else:
                         mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
@@ -1594,9 +1616,18 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                           doorState=j.get("on")
                       if j.get("deviceType") == "light" and "color" in j.keys():
                           print("light state is {} and light color is {} ".format(j.get("on"), j.get("color")))
-                          lightState=j.get("on")
-                          lightColor=j.get("color")
-                          lightLevel=j.get("level")
+                          if j.get("on") == "" or str(j.get("on")).__contains__(" "):
+                              pass
+                          else:
+                            lightState=j.get("on")
+                          if j.get("color") == "" or str(j.get("color")).__contains__(" "):
+                              pass
+                          else:
+                            lightColor=j.get("color")
+                          if j.get("level") == "" or str(j.get("level")).__contains__(" "):
+                              pass
+                          else:
+                            lightLevel=j.get("level")
                   ldState={"light_state":lightState,"light_color":lightColor,"light_level":lightLevel,"door_state":doorState,"light_temp":colorTemp,"lock_status":lockstate,"light_status":state}
                   self.send_response(200)
                   self.send_header('Content-Type', 'application/json')
