@@ -1260,10 +1260,10 @@ def sensor_status_publish():
 
                             mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
 
-                    if int(jtemp) > int(ltemp):
-                        difftemp=int(jtemp) - int(ltemp)
+                    if int(jtemp.split('.')[0]) > int(ltemp.split('.')[0]):
+                        difftemp=int(jtemp.split('.')[0]) - int(ltemp.split('.')[0])
                     else:
-                        difftemp = int(ltemp) - int(jtemp)
+                        difftemp = int(ltemp.split('.')[0]) - int(jtemp.split('.')[0])
 
                     if difftemp < 1:
                         pass
@@ -1388,7 +1388,12 @@ def device_list(startIndex):
             log.debug("Retrieving device list fails -{}".format(e))
             return 1
 
-
+def devices_list_update():
+    global deviceslistbyid
+    log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
+    deviceslistbyid={}
+    log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
+    device_list(0)
 
 def mqtt_connect():
     global mqtt_flag
@@ -1405,11 +1410,17 @@ def mqtt_connect():
 
 def device_list_manage():
     try:
+        log.debug("old deviceslist - {}".format(old_devicelistbyid.keys()))
+        log.debug("deviceslist - {}".format(deviceslistbyid.keys()))
         for i in old_devicelistbyid.keys():
             if (i in deviceslistbyid.keys()):
                 if old_devicelistbyid.get(i)[0] != deviceslistbyid.get(i)[0]:
                     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                           "{\""+old_devicelistbyid.get(i)[0]+"\":null}", qos=1)
+
+            if i not in deviceslistbyid.keys():
+                mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                    "{\"" + old_devicelistbyid.get(i)[0] + "\":null}", qos=1)
 
 
         old_devicelistbyid.update(deviceslistbyid.copy())
@@ -2143,7 +2154,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         body = self.rfile.read(content_length)
                         log.debug("body is {}".format(body))
                         try:
-                            device_list(0)
+                            # device_list(0)
+                            devices_list_update()
                             data = json.loads(body)
 
 
@@ -2702,7 +2714,8 @@ def get_iot_ip():
                 else:
                    log.debug('iot ip is unavailable')
                 log.debug("iot ip ={}".format(iot_ip))
-                device_list(0)
+                # device_list(0)
+                devices_list_update()
 
 
 
@@ -2859,6 +2872,7 @@ try:
 
     mqtt_client.publish('devices/' + pod_id + '/messages/events/',    "{\"ZenServer\":\"zenspace server started\"}",
                         qos=1)
+
     # inform_pod_state()
 
     if iot_ip == '' :
@@ -2876,7 +2890,8 @@ try:
             # network_stats()
             gateway_status()
 
-            device_list(start)
+            # device_list(start)
+            devices_list_update()
         except Exception as e:
             log.debug("Exception - main status calls - {}".format(e))
         if len(deviceslistbyid) == 0:
@@ -2892,7 +2907,8 @@ try:
             pod_status()
         except Exception as e:
             log.debug("Exception - main status publish - {}".format(e))
-        setInterval(DEVICE_TIMER, device_list,start)
+        # setInterval(DEVICE_TIMER, device_list,start)
+        setInterval(DEVICE_TIMER, devices_list_update)
         setInterval(POD_TIMER, pod_status)
         setInterval(GATEWAY_TIMER,gateway_status)
         # setInterval(SENSOR_TIMER,sensor_status,start)
