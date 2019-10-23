@@ -82,6 +82,7 @@ unreachable_host = []
 offlineDevices=[];
 intrusionDetection=0;
 intrusion=[];
+doorLockException=''
 intrusionDetectionTime=datetime.datetime.utcnow().replace(microsecond=0);
 #set light state as enabled intitally
 
@@ -965,7 +966,7 @@ def single_sensor_status(sensor_id):
 
 def change_to_state_color(startIndex):
     # log.debug("change to state color fucntion begins")
-    global total_devices, iot_ip, podState, intrusionDetection, beforePodState, intrusionDetectionTime
+    global total_devices, iot_ip, podState, intrusionDetection, beforePodState, intrusionDetectionTime,deviceslistbyid
     try:
         if (startIndex >= total_devices):
             # log.debug("change to state color ends")
@@ -980,7 +981,10 @@ def change_to_state_color(startIndex):
         count = 0
         for x in list:
             count = count + 1
+
             identifier = x.get("identifier")
+            rxtime=x.get("rxTime")
+
             color = '';
             if x.get("colorHue") != None:
 
@@ -1000,6 +1004,10 @@ def change_to_state_color(startIndex):
                     color = 'red'
                 else:
                     color = 'white'
+
+
+
+
                 cTime = datetime.datetime.utcnow().replace(microsecond=0)
                 if cTime > intrusionDetectionTime:
                     diff = cTime - intrusionDetectionTime
@@ -1007,7 +1015,7 @@ def change_to_state_color(startIndex):
                     diff = intrusionDetectionTime - cTime
                 diffSeconds = diff.seconds;
                 # log.debug("name -{} ,cTime - {} ,inTime - {} , diff - {}".format(name,cTime,intrusionDetectionTime,diffSeconds))
-                if intrusionDetection == 1 and (podState == "Available" or podState == "Reserved") and int(
+                if intrusionDetection == 1 and (podState == "Available" ) and int(
                         diffSeconds) < INTURSION_CHECK_TIMER:
                     log.debug("intrusion detected,don't trigger color change")
                     pass
@@ -1019,19 +1027,19 @@ def change_to_state_color(startIndex):
                         pass
                 else:
 
-                    if podState == "Available" and color != AVAILCOLOR:
+                    if podState == "Available" and color != AVAILCOLOR and rxtime != 0:
                         log.debug("trigger color change-available")
                         group_light_change(AVAILCOLOR)
-                    elif podState == "Reserved" and color != RESERVECOLOR:
+                    elif podState == "Reserved" and color != RESERVECOLOR and rxtime != 0:
                         log.debug("trigger color change-reserved")
                         group_light_change(RESERVECOLOR)
-                    elif podState == "Admin In Use" and color != ADMININUSECOLOR:
+                    elif podState == "Admin In Use" and color != ADMININUSECOLOR and rxtime != 0:
                         log.debug("trigger color change-admin in use")
                         group_light_change(ADMININUSECOLOR)
-                    elif podState == "Reservation In Use" and color != RESERVEINUSECOLOR:
+                    elif podState == "Reservation In Use" and color != RESERVEINUSECOLOR and rxtime != 0:
                         log.debug("trigger color change-reservation in use")
                         group_light_change(RESERVEINUSECOLOR)
-                    elif podState == "TimeOut" and color != TIMEOUTCOLOR:
+                    elif podState == "TimeOut" and color != TIMEOUTCOLOR and rxtime != 0:
                         log.debug("trigger color change-timeout")
                         group_light_change(TIMEOUTCOLOR)
 
@@ -1254,7 +1262,7 @@ def sensor_status_publish():
                             diffbat=int(jbat)-int(lbat)
                         else:
                             diffbat=int(lbat)-int(jbat)
-                        log.debug("jbat {} ,lbat {} ,diffbat {}".format(jbat,lbat,diffbat))
+                        # log.debug("jbat {} ,lbat {} ,diffbat {}".format(jbat,lbat,diffbat))
                         if diffbat > 5:
                             log.debug("battery level differnece grater than 5")
 
@@ -1390,9 +1398,9 @@ def device_list(startIndex):
 
 def devices_list_update():
     global deviceslistbyid
-    log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
+    # log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
     deviceslistbyid={}
-    log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
+    # log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
     device_list(0)
 
 def mqtt_connect():
@@ -1410,8 +1418,8 @@ def mqtt_connect():
 
 def device_list_manage():
     try:
-        log.debug("old deviceslist - {}".format(old_devicelistbyid.keys()))
-        log.debug("deviceslist - {}".format(deviceslistbyid.keys()))
+        # log.debug("old deviceslist - {}".format(old_devicelistbyid.keys()))
+        # log.debug("deviceslist - {}".format(deviceslistbyid.keys()))
         for i in old_devicelistbyid.keys():
             if (i in deviceslistbyid.keys()):
                 if old_devicelistbyid.get(i)[0] != deviceslistbyid.get(i)[0]:
@@ -1697,7 +1705,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.wfile.write(b'Success')
                     except Exception as e:
                         res = "412,bad request-{}".format(e)
-                        log.debug("Exception raised in /doorLock post request {}".format(e))
+                        log.debug("Exception raised in /eventhub post request {}".format(e))
                         self.send_response(412)
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
@@ -1722,7 +1730,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         log.debug("POST request")
-        global podState, prevPodState,group_id,state,beforePodState,intrusionDetection,intrusionDetectionTime,intrusion,lockstate
+        global podState, prevPodState,group_id,state,beforePodState,intrusionDetection,intrusionDetectionTime,intrusion,lockstate,doorLockException
         if None != re.search('/doorLock', self.path):
                 global podState
                 log.debug("/doorLock state of the pod is  {}".format(podState))
@@ -1803,11 +1811,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                        self.wfile.write(b'Admin In Use')
                                        log.debug(" Admin in Use")
                                    else:
-                                       res="500,unexpected error"
+                                       res="500,unexpected error {}".format(doorLockException)
                                        self.send_response(500)
                                        self.end_headers()
                                        self.wfile.write(b'Unexpected error')
                                        log.debug(" Unexpected error")
+                                       doorLockException='';
 
 
                                 else:
@@ -2330,7 +2339,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
 def verifyAuth(pin):
-    global iot_ip,tmpState
+    global iot_ip,tmpState,doorLockException
     try:
         auth = cs.CSClient().get("zenspace/pin_auth");
         admin_auth=cs.CSClient().get("zenspace/admin_auth")
@@ -2625,6 +2634,7 @@ def verifyAuth(pin):
                      return getAuthentications(pin, totalpincount)
     except Exception as e:
         log.debug("Exception - verifyAuth -{}".format(e))
+        doorLockException=e
         return 500
 
 def getAuthentications(pin,count):
