@@ -1273,7 +1273,7 @@ def sensor_status_publish():
                     else:
                         difftemp = int(ltemp.split('.')[0]) - int(jtemp.split('.')[0])
 
-                    if difftemp < 1:
+                    if difftemp <= 1:
                         pass
                     else:
                         mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
