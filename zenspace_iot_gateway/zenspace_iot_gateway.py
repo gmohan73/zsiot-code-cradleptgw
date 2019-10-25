@@ -82,7 +82,6 @@ unreachable_host = []
 offlineDevices=[];
 intrusionDetection=0;
 intrusion=[];
-doorLockException=''
 intrusionDetectionTime=datetime.datetime.utcnow().replace(microsecond=0);
 #set light state as enabled intitally
 
@@ -191,8 +190,11 @@ def group():
                         pass
                     else:
                         offlineDevices.append("demolocation")
-                        data = {"lightgroup": "Group for light is miscommisioned"}
-                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'),
+                        # data = {"lightgroup": "Group for light is miscommisioned"}
+                        # mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'),
+                        #                     qos=1)
+                        data={"type":"CRITICAL","deviceType":"sensor","name":"light group","message":"Group for light is miscommisioned"}
+                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data),
                                             qos=1)
         if "demo lights" not in gnames:
             log.debug("group is not present")
@@ -201,8 +203,11 @@ def group():
             else:
                 log.debug("publish the group is not commisioned");
                 offlineDevices.append("demo")
-                data={"lightgroup":"Group for light is not commisioned"}
-                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'), qos=1)
+                # data={"lightgroup":"Group for light is not commisioned"}
+                # mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'), qos=1)
+                data = {"type": "CRITICAL", "deviceType": "sensor", "name": "light group",
+                        "message": "Group for light is not commisioned"}
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
         else:
             log.debug("group is present ")
             if "demo" in offlineDevices:
@@ -966,7 +971,7 @@ def single_sensor_status(sensor_id):
 
 def change_to_state_color(startIndex):
     # log.debug("change to state color fucntion begins")
-    global total_devices, iot_ip, podState, intrusionDetection, beforePodState, intrusionDetectionTime,deviceslistbyid
+    global total_devices, iot_ip, podState, intrusionDetection, beforePodState, intrusionDetectionTime
     try:
         if (startIndex >= total_devices):
             # log.debug("change to state color ends")
@@ -981,10 +986,8 @@ def change_to_state_color(startIndex):
         count = 0
         for x in list:
             count = count + 1
-
             identifier = x.get("identifier")
             rxtime=x.get("rxTime")
-
             color = '';
             if x.get("colorHue") != None:
 
@@ -1004,10 +1007,6 @@ def change_to_state_color(startIndex):
                     color = 'red'
                 else:
                     color = 'white'
-
-
-
-
                 cTime = datetime.datetime.utcnow().replace(microsecond=0)
                 if cTime > intrusionDetectionTime:
                     diff = cTime - intrusionDetectionTime
@@ -1015,31 +1014,31 @@ def change_to_state_color(startIndex):
                     diff = intrusionDetectionTime - cTime
                 diffSeconds = diff.seconds;
                 # log.debug("name -{} ,cTime - {} ,inTime - {} , diff - {}".format(name,cTime,intrusionDetectionTime,diffSeconds))
-                if intrusionDetection == 1 and (podState == "Available" ) and int(
+                if intrusionDetection == 1 and (podState == "Available") and int(
                         diffSeconds) < INTURSION_CHECK_TIMER:
                     log.debug("intrusion detected,don't trigger color change")
                     pass
                 elif intrusionDetection == 1 and (
                         podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min") and int(
                         diffSeconds) < INTURSION_CHECK_TIMER:
-                    if beforePodState == "Available" or beforePodState == "Reserved":
+                    if beforePodState == "Available" :
                         log.debug("intrusion detected,don't trigger color change")
                         pass
                 else:
 
-                    if podState == "Available" and color != AVAILCOLOR and rxtime != 0:
+                    if podState == "Available" and color != AVAILCOLOR and rxtime !=0:
                         log.debug("trigger color change-available")
                         group_light_change(AVAILCOLOR)
-                    elif podState == "Reserved" and color != RESERVECOLOR and rxtime != 0:
+                    elif podState == "Reserved" and color != RESERVECOLOR and rxtime !=0:
                         log.debug("trigger color change-reserved")
                         group_light_change(RESERVECOLOR)
-                    elif podState == "Admin In Use" and color != ADMININUSECOLOR and rxtime != 0:
+                    elif podState == "Admin In Use" and color != ADMININUSECOLOR and rxtime!=0:
                         log.debug("trigger color change-admin in use")
                         group_light_change(ADMININUSECOLOR)
-                    elif podState == "Reservation In Use" and color != RESERVEINUSECOLOR and rxtime != 0:
+                    elif podState == "Reservation In Use" and color != RESERVEINUSECOLOR and rxtime !=0:
                         log.debug("trigger color change-reservation in use")
                         group_light_change(RESERVEINUSECOLOR)
-                    elif podState == "TimeOut" and color != TIMEOUTCOLOR and rxtime != 0:
+                    elif podState == "TimeOut" and color != TIMEOUTCOLOR and rxtime !=0:
                         log.debug("trigger color change-timeout")
                         group_light_change(TIMEOUTCOLOR)
 
@@ -1169,8 +1168,11 @@ def sensor_status(startIndex):
                                        log.debug("{} sensor unreachable".format(name))
                                        sensorOffline.append(name)
                                        nameAlert = name+"_alert"
-                                       data={nameAlert: "sensor unreachable : Current_UTC: {} , Sensor_UTC: {}".format(current_rxtime,sensor_rxtime)}
-                                       mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'), qos=1)
+                                       data = {"type": "WARNING", "deviceType": "sensor", "name": nameAlert,
+                                               "message": "sensor unreachable : Current_UTC: {} , Sensor_UTC: {}".format(current_rxtime,sensor_rxtime)
+                                               }
+                                       # data={nameAlert: "sensor unreachable : Current_UTC: {} , Sensor_UTC: {}".format(current_rxtime,sensor_rxtime)}
+                                       mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
                            else:
 
                                if name in sensorOffline:
@@ -1230,15 +1232,22 @@ def sensor_status_publish():
 
 
         if len(devicestatuswithoutrx) == 0:
-
-            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(devicestatus), qos=2)
+            for i,j in devicestatus.items():
+                data = {"type": "INFO", "deviceType": "sensor", "name":i ,
+                    "message": j
+                    }
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode("utf-8"), qos=2)
+            # mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(devicestatus), qos=2)
         for (i, j), (k, l),(m,n) in zip(devicestatuswithoutrx.items(), devicestatustemp.items(),devicestatus.items()):
             if devicestatuswithoutrx.get(i) == devicestatustemp.get(i):
                 print("same state")
 
 
             else:
-                dat = {m: n}
+                dat = {"type": "INFO", "deviceType": "sensor", "name": m,
+                        "message": n
+                        }
+                # dat = {m: n}
                 # log.debug(" j is {}".format(j) )
                 # log.debug(" l is {}".format(l))
                 if "motion" in j.keys() and "motion" in l.keys():
@@ -1262,11 +1271,11 @@ def sensor_status_publish():
                             diffbat=int(jbat)-int(lbat)
                         else:
                             diffbat=int(lbat)-int(jbat)
-                        # log.debug("jbat {} ,lbat {} ,diffbat {}".format(jbat,lbat,diffbat))
+                        log.debug("jbat {} ,lbat {} ,diffbat {}".format(jbat,lbat,diffbat))
                         if diffbat > 5:
                             log.debug("battery level differnece grater than 5")
 
-                            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
+                            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
 
                     if int(jtemp.split('.')[0]) > int(ltemp.split('.')[0]):
                         difftemp=int(jtemp.split('.')[0]) - int(ltemp.split('.')[0])
@@ -1276,12 +1285,12 @@ def sensor_status_publish():
                     if difftemp <= 1:
                         pass
                     else:
-                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
+                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
 
                     if jwithoutBat == lwithoutBat:
                         log.debug("rest also same")
                     else:
-                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat), qos=1)
+                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
 
                 else:
                     log.debug("different state")
@@ -1290,7 +1299,7 @@ def sensor_status_publish():
                     log.debug("k is {} ,l is {}".format(k,l))
                     log.debug("m is {} , n is {}".format(m,n))
                     # dat={i:j}
-                    mqtt_client.publish('devices/' + pod_id + '/messages/events/?rid=2300', json.dumps(dat), qos=1)
+                    mqtt_client.publish('devices/' + pod_id + '/messages/events/?rid=2300', json.dumps(dat).encode("utf-8"), qos=1)
 
                     print("\t\t\t\tdevice status{}".format(devicestatus))
 
@@ -1316,8 +1325,15 @@ def network_stats():
         lan_in=cs.CSClient().get("/status/stats/usage/lan_in").get("data");
         lan_out=cs.CSClient().get("/status/stats/usage/lan_out").get("data");
         for (wi,wo,li,lo) in zip(wan_in,wan_out,lan_in,lan_out):
-          mqtt_client.publish('devices/' + pod_id + '/messages/events/', "{\"wan_in\":" + str(wi) + " , \"wan_out\" :"+str(wo)+" ,\"lan_in\" :"+str(li)+ ", \"lan_out\" : "+str(lo)+ " }",
-                            qos=0)
+            s={"wan_in":  str(wi),"wan_out" :str(wo),"lan_in" :str(li), "lan_out" : str(lo) }
+            data = {"type": "INFO", "deviceType": "cradlepoint", "name": "network status",
+                    "message":s
+                    }
+            # mqtt_client.publish('devices/' + pod_id + '/messages/events/', "{\"wan_in\":" + str(wi) + " , \"wan_out\" :"+str(wo)+" ,\"lan_in\" :"+str(li)+ ", \"lan_out\" : "+str(lo)+ " }",
+            #                 qos=0)
+            mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                json.dumps(data),
+                                qos=0)
     except Exception as e:
         log.debug("Exception - network stats {}".format(e))
 
@@ -1344,9 +1360,15 @@ def get_number_of_devices():
                 pass
             else:
                 offlineDevices.append("totalDevices")
+                data = {"type": "CRITICAL", "deviceType": "sensor", "name": "All sensors",
+                        "message": "sensors are not commisioned"
+                        }
+                # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                #                 "{\"SENSORS_ALERT\": \"sensors are not commisioned\" }",
+                #                 qos=1)
                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                "{\"SENSORS_ALERT\": \"sensors are not commisioned\" }",
-                                qos=1)
+                                    json.dumps(data),
+                                    qos=1)
 
 
         return total_devices;
@@ -1398,9 +1420,9 @@ def device_list(startIndex):
 
 def devices_list_update():
     global deviceslistbyid
-    # log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
+    log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
     deviceslistbyid={}
-    # log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
+    log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
     device_list(0)
 
 def mqtt_connect():
@@ -1418,8 +1440,8 @@ def mqtt_connect():
 
 def device_list_manage():
     try:
-        # log.debug("old deviceslist - {}".format(old_devicelistbyid.keys()))
-        # log.debug("deviceslist - {}".format(deviceslistbyid.keys()))
+        log.debug("old deviceslist - {}".format(old_devicelistbyid.keys()))
+        log.debug("deviceslist - {}".format(deviceslistbyid.keys()))
         for i in old_devicelistbyid.keys():
             if (i in deviceslistbyid.keys()):
                 if old_devicelistbyid.get(i)[0] != deviceslistbyid.get(i)[0]:
@@ -1488,8 +1510,19 @@ def health_monitioring():
                           pass
                         else:
                             unreachable_host.append(host)
+                            if hostname.__contains__("GATEWAY"):
+                                data = {"type": "CRITICAL", "deviceType": "IOTgateway", "name": hostname,
+                                    "message": "Ping request failed for {} , {}".format(host,result['data']['result']),
+                                    "dateTime": str(datetime.datetime.utcnow())}
+                            else:
+                                data = {"type": "CRITICAL", "deviceType": "Zenspace devices", "name": hostname,
+                                        "message": "Ping request failed for {} , {}".format(host,result['data']['result'])
+                                        }
+                            # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                            #                     "{\"health_monitor\": \""+host + " - "+ hostname+" ping request failed \" }",
+                            #                     qos=1)
                             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                "{\"health_monitor\": \""+host + " - "+ hostname+" ping request failed \" }",
+                                                json.dumps(data),
                                                 qos=1)
                     if result.get('data').get('status') == "done":
                         if host in unreachable_host:
@@ -1501,8 +1534,14 @@ def health_monitioring():
                 pass
             else:
                 unreachable_host.append("all")
+                data = {"type": "CRITICAL", "deviceType": "Zenspace devices", "name":"All devices" ,
+                        "message": "No device found"
+                        }
+                # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                #                     "{\"health_monitor\": \"MAC address is not found\" }",
+                #                     qos=1)
                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                    "{\"health_monitor\": \"MAC address is not found\" }",
+                                    json.dumps(data),
                                     qos=1)
 
             # log.info("ping result: %s\n%s", error_str)
@@ -1552,15 +1591,29 @@ def lock_door():
                         pass
                     else:
                         sensorOffline.append("door_lock")
+                        data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
+                                "message": "sensor unreachable : Current_UTC: {} ,Sensor_UTC: {}".format(currenttime,lctime)
+                                }
+                        # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                        #                 "{\"door_lock_alert\": \"sensor unreachable : Current_UTC: {} ,Sensor_UTC: {}\" }".format(currenttime,lctime),
+                        #                 qos=1)
                         mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                        "{\"door_lock_alert\": \"sensor unreachable : Current_UTC: {} ,Sensor_UTC: {}\" }".format(currenttime,lctime),
-                                        qos=1)
+                                            json.dumps(data),
+                                            qos=1)
 
         else:
             log.debug("door lock id is missing")
+            data = {"type": "CRITICAL", "deviceType": "sensor", "name": "door_lock",
+                    "message": "sensor missing"
+                    }
+
             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                "{\"door_lock_alert\": \"sensor missing \" }",
+                                json.dumps(data),
                                 qos=1)
+
+            # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+            #                     "{\"door_lock_alert\": \"sensor missing \" }",
+            #                     qos=1)
     except Exception as e:
         log.debug("Exception - locking the door -- {}".format(e))
 
@@ -1705,7 +1758,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.wfile.write(b'Success')
                     except Exception as e:
                         res = "412,bad request-{}".format(e)
-                        log.debug("Exception raised in /eventhub post request {}".format(e))
+                        log.debug("Exception raised in /doorLock post request {}".format(e))
                         self.send_response(412)
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
@@ -1816,7 +1869,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                        self.end_headers()
                                        self.wfile.write(b'Unexpected error')
                                        log.debug(" Unexpected error")
-                                       doorLockException='';
+                                       doorLockException=''
 
 
                                 else:
@@ -1846,8 +1899,11 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
                         log.debug(" 412 bad request")
-                pindata = {"Reservation Login": {"pin": pin, "response": res, "podState": podState}}
-                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(pindata), qos=1)
+                d={"pin": pin, "response": res, "podState": podState}
+                data={"type": "INFO", "deviceType": "Unlock", "name": "Reservation Login","message": str(d)}
+                # pindata = {"Reservation Login": {"pin": pin, "response": res, "podState": podState}}
+                # mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(pindata), qos=1)
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
         elif None != re.search('/admindoorLock', self.path):
 
                 log.debug("/admindoorLock post request")
@@ -1987,10 +2043,17 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(b'BAD Request')
                     log.debug(" 415 bad request")
-                pindata = {
-                    "Admin Login": {"adminpin": adminpin, "adminkey": adminKey, "duration": duraTion, "response": res,
-                                    "podState": podState}}
-                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(pindata), qos=1)
+                # pindata = {
+                #     "Admin Login": {"adminpin": adminpin, "adminkey": adminKey, "duration": duraTion, "response": res,
+                #                     "podState": podState}}
+                #
+                # mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(pindata), qos=1)
+
+                pindata={"adminpin": adminpin, "adminkey": adminKey, "duration": duraTion, "response": res,
+                                    "podState": podState}
+                data = {"type": "INFO", "deviceType": "Unlock", "name": "Admin Login", "message": str(pindata)
+                        }
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
 
         elif None != re.search('/pod/state',self.path):
             try:
@@ -2067,8 +2130,14 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                     else:
                                         intrusion.append("intruder")
                                         log.debug("intrusion detected")
+                                        data = {"type": "INFO", "deviceType": "Webcam", "name": "intruder",
+                                                "message": "Intruder detected"
+                                                }
+                                        # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                        #                     "{\"intruder_alert\": \"Intruder detected \" }",
+                                        #                     qos=1)
                                         mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                            "{\"intruder_alert\": \"Intruder detected \" }",
+                                                            json.dumps(data),
                                                             qos=1)
                                 elif hval == "no":
                                     if "intruder" in intrusion:
@@ -2452,9 +2521,15 @@ def verifyAuth(pin):
                                             pass
                                         else:
                                             sensorOffline.append("door_lock")
+                                            data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
+                                                    "message": "sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}".format(currenttime,lctime)
+                                                    }
+                                            # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                            #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
+                                            #                 qos=1)
                                             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                            "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
-                                                            qos=1)
+                                                                json.dumps(data),
+                                                                qos=1)
 
                                         log.debug("In else returning 0")
                                         # return 20
@@ -2469,9 +2544,18 @@ def verifyAuth(pin):
                             else:
 
                                 log.debug("door lock device id missing")
-                                mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                    "{\"door_lock_alert\": \"sensor missing \" }",
-                                                    qos=1)
+                                if "door_lock" in sensorOffline:
+                                    pass
+                                else:
+                                    data = {"type": "CRITICAL", "deviceType": "sensor", "name": "door_lock",
+                                            "message": "sensor missing"
+                                            }
+                                    # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                    #                 "{\"door_lock_alert\": \"sensor missing \" }",
+                                    #                 qos=1)
+                                    mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                                        json.dumps(data),
+                                                        qos=1)
                                 # return 20
                                 return 0
                         else:
@@ -2512,14 +2596,27 @@ def verifyAuth(pin):
                                         pass
                                     else:
                                         log.debug("door lock sensor is unreachable")
+                                        data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
+                                                "message": "sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}".format(
+                                                    currenttime, lctime)
+                                                }
+                                        # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                        #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
+                                        #                 qos=1)
                                         mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                            "{\"door_lock_alert\": \"sensor unreachable , Current_UTC: {},Sensor_UTC: {}\" }".format(currenttime,lctime),
+                                                            json.dumps(data),
                                                             qos=1)
 
                             else:
                                 log.debug("door lock id is missing")
+                                data = {"type": "CRITICAL", "deviceType": "sensor", "name": "door_lock",
+                                        "message": "sensor missing"
+                                        }
+                                # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                #                 "{\"door_lock_alert\": \"sensor missing \" }",
+                                #                 qos=1)
                                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                    "{\"door_lock_alert\": \"sensor missing \" }",
+                                                    json.dumps(data),
                                                     qos=1)
                             return 202
                         else:
@@ -2569,13 +2666,26 @@ def verifyAuth(pin):
                                             pass
                                         else:
                                             sensorOffline.append("door_lock")
+                                            data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
+                                                    "message": "sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}".format(
+                                                        currenttime, lctime)
+                                                    }
+                                            # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                            #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
+                                            #                 qos=1)
                                             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                            "{\"door_lock_alert\": \"sensor unreachable , Current_UTC: {} ,Sensor_UTC: {} \" }".format(currenttime,lctime),
-                                                            qos=1)
+                                                                json.dumps(data),
+                                                                qos=1)
 
                             else:
+                                data = {"type": "CRITICAL", "deviceType": "sensor", "name": "door_lock",
+                                        "message": "sensor missing"
+                                        }
+                                # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                #                 "{\"door_lock_alert\": \"sensor missing \" }",
+                                #                 qos=1)
                                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                    "{\"door_lock_alert\": \"sensor missing \" }",
+                                                    json.dumps(data),
                                                     qos=1)
                             return 202
                         else:
@@ -2617,13 +2727,26 @@ def verifyAuth(pin):
                               if (diffsec < SENSOR_OFFLINE_TIMER):
                                   pass
                               else:
+                                  data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
+                                          "message": "sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}".format(
+                                              currenttime, lctime)
+                                          }
+                                  # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                  #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
+                                  #                 qos=1)
                                   mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                      "{\"door_lock_alert\": \"sensor unreachable , Current_UTC: {} , sensor_UTC: {} \" }".format(currenttime,lctime),
+                                                      json.dumps(data),
                                                       qos=1)
 
                       else:
+                          data = {"type": "CRITICAL", "deviceType": "sensor", "name": "door_lock",
+                                  "message": "sensor missing"
+                                  }
+                          # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                          #                 "{\"door_lock_alert\": \"sensor missing \" }",
+                          #                 qos=1)
                           mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                              "{\"door_lock_alert\": \"sensor missing \" }",
+                                              json.dumps(data),
                                               qos=1)
                       return 202
                   else:
@@ -2760,8 +2883,15 @@ def get_desired():
     try:
 
         global podState
-        mqtt_client.publish('devices/' + pod_id + '/messages/events/', "{\"ZenServer\":\"zenspace back to online\"}",
+        data = {"type": "INFO", "deviceType": "cradlepoint", "name": "ZenServer",
+                "message": "zenspace back to online"
+                }
+
+        mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                            json.dumps(data),
                             qos=1)
+        # mqtt_client.publish('devices/' + pod_id + '/messages/events/', "{\"ZenServer\":\"zenspace back to online\"}",
+        #                     qos=1)
         log.debug("get desired - podState {}".format(podState))
         mqtt_client.subscribe("$iothub/twin/res/#")
         desid = "101"
@@ -2880,7 +3010,12 @@ try:
                         "{\"timers\": { \"lock_timer\":\"" + str(LOCK_TIMER) + "\"}}",
                         qos=1)
 
-    mqtt_client.publish('devices/' + pod_id + '/messages/events/',    "{\"ZenServer\":\"zenspace server started\"}",
+    data = {"type": "INFO", "deviceType": "cradlepoint", "name": "ZenServer",
+            "message": "zenspace server started"
+            }
+    # mqtt_client.publish('devices/' + pod_id + '/messages/events/',    "{\"ZenServer\":\"zenspace server started\"}",
+    #                     qos=1)
+    mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data),
                         qos=1)
 
     # inform_pod_state()
