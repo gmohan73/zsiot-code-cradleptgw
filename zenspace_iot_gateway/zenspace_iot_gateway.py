@@ -2895,7 +2895,7 @@ def get_desired():
         log.debug("get desired - podState {}".format(podState))
         mqtt_client.subscribe("$iothub/twin/res/#")
         desid = "101"
-        mqtt_client.publish('$iothub/twin/GET/?$rid=' + desid, qos=1)
+        # mqtt_client.publish('$iothub/twin/GET/?$rid=' + desid, qos=1)
     except Exception as e:
         log.debug("Exception  - get desired {}".format(e))
 
