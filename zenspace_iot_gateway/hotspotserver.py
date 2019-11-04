@@ -1,6 +1,7 @@
 import cgi
 import json
 import time
+import urllib.request
 import datetime
 import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -13,8 +14,11 @@ log= AppLogger()
 global record
 record = {}
 validverify=''
-
+url="http://192.168.100.1:9001"
+headers={};
+headers = {"Content-Type": "application/json"}
 TIMER = 10
+URL_TIMEOUT = 40
 #Starting server http://{}:9001.This server will run forever
 def start_server():
     # avoid 8080, as the router may have service on it.
@@ -77,6 +81,15 @@ def verifyAuth(pin,client_ip):
                         tout=str(timeOut)
                         timeout=datetime.datetime.strptime(tout, "%Y-%m-%d %H:%M:%S")
                         record.update({client_ip: [timeIn,timeout , pin]})
+                        try:
+                            dat={"timeOut":str(timeout)}
+                            data = json.dumps(dat).encode("utf-8")
+                            req = urllib.request.Request(url+ "/reservationHotspotLogin", headers=headers, data=data,
+                                                         method="POST")
+                            resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+                            log.debug("resp code- {}".format(resp.read()))
+                        except Exception as e:
+                            log.debug("Exception raises on calling /reservationHotspotLogin = {}".format(e))
                         return 0
                     else:
                         validverify = "invalid"
@@ -143,6 +156,8 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
     global validverify
 
     def do_GET(self):
+        res = urllib.request.urlopen(iot_ip + '/groups', timeout=URL_TIMEOUT)
+        gres = res.read()
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-control-Allow-Origin', '*')
@@ -191,6 +206,7 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                              'Content-Type, X-Requested-with')
                             self.end_headers()
                             self.wfile.write(bytes(json.dumps({"success": "true"}), 'utf-8'))
+
 
 
 
@@ -295,6 +311,18 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                 self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-with')
                                 self.end_headers()
                                 self.wfile.write(bytes(json.dumps({"success": "true"}), 'utf-8'))
+                                log.debug("calling 9001 port to change the state")
+                                try:
+                                    dat = {"duration": duration}
+                                    log.debug("url {}".format(url))
+                                    data = json.dumps(dat).encode("utf-8")
+                                    req = urllib.request.Request(url + "/adminHotspotLogin", headers=headers,
+                                                                 data=data,
+                                                                 method="POST")
+                                    resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+                                    log.debug("resp code- {}".format(resp.read()))
+                                except Exception as e:
+                                    log.debug("Exception raises on calling /adminHotspotLogin = {}".format(e))
 
 
                             else:

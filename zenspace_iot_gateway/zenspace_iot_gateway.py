@@ -47,6 +47,7 @@ old_devicelistbyid={};
 total_devices='';
 zenurl=settings.ZEN_URL
 iot_ip=''
+reservePodState='Unknown'
 podState='Unknown';
 prevPodState='';
 cloudPodState="Unknown";
@@ -1917,7 +1918,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         log.debug("POST request")
-        global podState, prevPodState,group_id,state,beforePodState,intrusionDetection,intrusionDetectionTime,intrusion,lockstate,doorLockException,intruderState
+        global podState, prevPodState,group_id,state,beforePodState,intrusionDetection,intrusionDetectionTime,intrusion,lockstate,doorLockException,intruderState,reservePodState
         if None != re.search('/doorLock', self.path):
                 global podState
                 log.debug("/doorLock state of the pod is  {}".format(podState))
@@ -1946,6 +1947,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
                                 if x == "pin":
                                    pin =y
+                                   reservePodState=podState
                                    s = verifyAuth(y)
 
                                    log.debug(" Value returned from authverify{}".format(s))
@@ -1961,11 +1963,16 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                        self.wfile.write(b'Door Opened')
                                        log.debug("response code is {} - response text is {}".format("200","Door Opened"))
 
-                                       update_pod_state()
+                                       if reservePodState == "Reservation In Use":
+                                           log.debug("Reservation user loging in when state is {}".format(podState))
+                                           pass
+                                       else:
+                                           update_pod_state()
 
-                                       # sensor_status(0)
-                                       sensor_status_publish()
-                                       inform_pod_state()
+                                           # sensor_status(0)
+                                           sensor_status_publish()
+                                           inform_pod_state()
+
 
                                    elif s == 1:
                                        res="1,UnAuthorized"
@@ -2041,6 +2048,122 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 # pindata = {"Reservation Login": {"pin": pin, "response": res, "podState": podState}}
                 # mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(pindata), qos=1)
                 mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
+
+        elif None != re.search('/adminHotspotLogin',self.path):
+            log.debug("/adminHotspotLogin post request")
+            type = self.headers['Content-Type']
+            if type == "application/json":
+                try:
+                    content_length = int(self.headers['Content-Length'])
+
+                    body = self.rfile.read(content_length)
+                    log.debug("request body - {}".format(body))
+
+                    data = json.loads(body)
+                    if "duration" in data.keys():
+                        duration=data.get("duration")
+                        if podState == "Admin In Use":
+                            log.debug("Admin login via hotspot,state is {}".format(podState))
+                            pass
+                        else:
+                            prevPodState = podState
+                            log.debug("Admin timer will trigger after {}".format(duration))
+                            setTimeoutMinutes(int(duration), change_prev_pod_state)
+                            podState = "Admin In Use"
+
+                            update_pod_state()
+                            mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                            "{\"pod_state\":\"" + podState + "\"}",
+                                            qos=1)
+                            sensor_status_publish()
+
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(b'Success')
+                        log.debug("200 Success")
+                    else:
+
+                        res="403,Bad request"
+                        self.send_response(403)
+                        self.end_headers()
+                        self.wfile.write(b'BAD Request')
+                        log.debug(" 403 bad request")
+
+                except Exception as e:
+
+                    self.send_response(412)
+                    self.end_headers()
+                    self.wfile.write(b'BAD Request')
+                    log.debug(" 412 bad request {}".format(e))
+            else:
+                self.send_response(415)
+                self.end_headers()
+                self.wfile.write(b'BAD Request')
+                log.debug(" 415 bad request")
+
+
+        elif None != re.search('/reservationHotspotLogin', self.path):
+            log.debug("/reservationHotspotLogin post request")
+            type = self.headers['Content-Type']
+            if type == "application/json":
+                try:
+                    content_length = int(self.headers['Content-Length'])
+
+                    body = self.rfile.read(content_length)
+                    log.debug("request body - {}".format(body))
+
+                    data = json.loads(body)
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b'Success')
+                    log.debug("200 Success")
+                    if "timeOut" in data.keys():
+                        timeOut=data.get("timeOut")
+
+                        if podState == "Reservation In Use":
+                            pass
+                        else:
+                            podState = "Reservation In Use"
+                            mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                                "{\"pod_state\":\"" + podState + "\"}",
+                                                qos=1)
+                            curtime=datetime.datetime.utcnow().replace(microsecond=0)
+                            tout=datetime.datetime.strptime(timeOut, "%Y-%m-%d %H:%M:%S")
+                            if curtime > tout:
+                                print("crxtime is greater")
+                                diff = curtime - tout
+                            else:
+                                print("sensor rxtime is greater")
+                                diff = tout - curtime
+                            timeOutSeconds = diff.seconds - 60
+                            setTimeout(timeOutSeconds, change_pod_state, "TimeOut")
+                            update_pod_state()
+
+                            # sensor_status(0)
+                            sensor_status_publish()
+                            inform_pod_state()
+
+
+                    else:
+
+                        res = "403,Bad request"
+                        self.send_response(403)
+                        self.end_headers()
+                        self.wfile.write(b'BAD Request')
+                        log.debug(" 403 bad request")
+
+                except Exception as e:
+
+                    self.send_response(412)
+                    self.end_headers()
+                    self.wfile.write(b'BAD Request')
+                    log.debug(" 412 bad request {}".format(e))
+            else:
+                self.send_response(415)
+                self.end_headers()
+                self.wfile.write(b'BAD Request')
+                log.debug(" 415 bad request")
+
         elif None != re.search('/admindoorLock', self.path):
 
                 log.debug("/admindoorLock post request")
@@ -2109,20 +2232,21 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                 #
                                                 # setTimeout(lockTime, lock_door)
                                                 if podState == "Admin In Use":
+                                                    log.debug("Admin unlockingthe door,state is {}".format(podState))
                                                     pass
                                                 else:
                                                     prevPodState = podState
                                                     log.debug("Admin timer will trigger after {}".format(duration))
                                                     setTimeoutMinutes(int(duration), change_prev_pod_state)
-                                                podState = "Admin In Use"
+                                                    podState = "Admin In Use"
 
 
                                                 
-                                                update_pod_state()
-                                                mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
-                                                                    "{\"pod_state\":\"" + podState + "\"}",
-                                                                    qos=1)
-                                                sensor_status_publish()
+                                                    update_pod_state()
+                                                    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                                                        "{\"pod_state\":\"" + podState + "\"}",
+                                                                        qos=1)
+                                                    sensor_status_publish()
                                                 # sensor_status(0)
 
                                                 #Commented out inform pod state no need ot inform salesforce
@@ -2622,19 +2746,22 @@ def verifyAuth(pin):
                                             tmpState = "Reservation in Use"
                                             #return 212
 
-
-                                        podState = "Reservation In Use"
-                                        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
-                                                            "{\"pod_state\":\"" + podState + "\"}",
-                                                            qos=1)
-                                        currentPin = pin
-                                        if curtime > timeOut:
-                                            print("crxtime is greater")
-                                            diff = curtime-timeOut
+                                        if podState == "Reservation In Use":
+                                            pass
                                         else:
-                                            print("sensor rxtime is greater")
-                                            diff = timeOut-curtime
-
+                                            podState = "Reservation In Use"
+                                            mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                                                "{\"pod_state\":\"" + podState + "\"}",
+                                                                qos=1)
+                                            currentPin = pin
+                                            if curtime > timeOut:
+                                                print("crxtime is greater")
+                                                diff = curtime-timeOut
+                                            else:
+                                                print("sensor rxtime is greater")
+                                                diff = timeOut-curtime
+                                            timeOutSeconds = diff.seconds - 60
+                                            setTimeout(timeOutSeconds, change_pod_state, "TimeOut")
 
 
                                         log.debug("login - lock state is {}".format(lockstate))
@@ -2645,8 +2772,7 @@ def verifyAuth(pin):
                                         #
                                         # setTimeout(lockTime, lock_door)
                                         sensor_status_publish()
-                                        timeOutSeconds = diff.seconds - 60
-                                        setTimeout(timeOutSeconds, change_pod_state, "TimeOut")
+
                                     currenttime = datetime.datetime.utcnow().replace(microsecond=0)
                                     lctimestamp = l.get("rxTime")
                                     lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
