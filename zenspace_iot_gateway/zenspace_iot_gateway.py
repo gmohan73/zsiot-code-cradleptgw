@@ -49,6 +49,7 @@ zenurl=settings.ZEN_URL
 iot_ip=''
 reservePodState='Unknown'
 podState='Unknown';
+prePodState='Unknown'
 prevPodState='';
 cloudPodState="Unknown";
 beforeChangePodState=''
@@ -100,6 +101,7 @@ headers['content-type'] = 'application/json'
 #IOT gateway url
 url="http://"
 zen_state_url=settings.ZEN_STATE_URL
+logicUrl=settings.ZEN_LOGICALNAME_URL
 
 # Path to the TLS certificates file. The certificates were copied from the certs.c file
 # located here: https://github.com/Azure/azure-iot-sdk-c/blob/master/certs/certs.c
@@ -428,7 +430,7 @@ def inform_pod_state():
 
 #Change pod state after admin tmieout.When state is "Admin In Use",state pushed by cloud is hold.After "Admin Timeout" ,the cloud pushed state is replaced.If cloud doesnot push any state ,in between "Admin In Use" and "Admin TmeOut",the previous state maintained by cradlepoint will be replaced.
 def change_prev_pod_state():
-    global podState,prevPodState,cloudPodState,tmpState,beforePodState,cloudbefore
+    global podState,prevPodState,cloudPodState,tmpState,beforePodState,cloudbefore,prePodState
     log.debug("changing pod state after admin timeout")
 
     try:
@@ -438,9 +440,11 @@ def change_prev_pod_state():
         else:
             # if cloudPodState == '' or cloudPodState == None:
             if cloudPodState == "Unknown":
+                    prePodState=podState
                     podState=prevPodState
 
             else:
+                prePodState = podState
                 podState = cloudPodState
 
 
@@ -473,11 +477,12 @@ def change_prev_pod_state():
 #To change pod state,update pod state to cloud and sales force
 def change_pod_state(state):
 
-    global podState
+    global podState,prePodState
     try:
         if( podState == "Admin In Use"):
             log.debug("Reservation Timeout is bypassed,because pod used by Admin")
         else:
+            prePodState = podState
             podState=state
             mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                 "{\"pod_state\":\"" + podState + "\"}",
@@ -489,6 +494,86 @@ def change_pod_state(state):
     except Exception as e:
         log.debug("Exception raises in change pod state - {}".format(e))
 
+def apply_logical_ssid(logicalName):
+    log.debug("apply logical ssid")
+
+    try:
+        i = 0;
+
+
+        lan = cs.CSClient().get('/config/lan');
+        wlan_radio = cs.CSClient().get('/config/wlan/radio')
+        radios = wlan_radio.get("data");
+        lan_interfaces = lan.get("data");
+        print(lan)
+        print(wlan_radio)
+        print(radios)
+        print(lan_interfaces)
+        num_lan_interfaces = lan_interfaces.__len__();
+        for inter in lan_interfaces:
+            # print(inter.__getitem__('name'))
+
+            print(i)
+            if (inter.__getitem__('route_mode') == "hotspot"):
+                print(inter.__getitem__('name'))
+                dev_path = '/config/lan/' + str(i) + '/devices'
+
+                dev = cs.CSClient().get(dev_path);
+
+                devices = dev.get("data");
+
+                for s in devices:
+                    type = s.__getitem__('type')
+                    uid = s.__getitem__('uid')
+
+                    j = 0
+                    if (type != "ethernet"):
+                        print(type, ": ", uid)
+                        for r in radios:
+                            bss = r.__getitem__('bss');
+
+                            k = 0;
+                            for bs in bss:
+
+                                bss_uid = bs.__getitem__('uid')
+                                print("bss _uid {}".format(bss_uid))
+
+                                if (bss_uid == uid):
+                                    print(bs.__getitem__('uid'))
+                                    print("radio =", j, "  bss= ", k)
+                                    cs.CSClient().put('/config/wlan/radio/' + str(j) + '/bss/' + str(k) + '/ssid',
+                                                      logicalName)
+
+
+                                else:
+                                    # print("rest were private ssid")
+                                    if (j == 0):
+                                        print("radio =", j, "  bss= ", k)
+
+                                k = k + 1;
+                            j = j + 1;
+
+            i = i + 1;
+    except Exception as e:
+        log.debug("Exception raised in apply logical ssid -- {}".format(e))
+def sync_logical_ssid():
+    global pod_id,logicUrl
+
+    try:
+        log.debug("Syncing logical ssid ")
+        localdate=datetime.datetime.now().date()
+        res = urllib.request.urlopen(logicUrl + pod_id + "/?localdate=" + str(localdate), timeout=URL_TIMEOUT)
+        # print(res.read())
+        data = json.loads(res.read())
+        print(data)
+        if "result" in data.keys():
+            print(data.get("result"))
+            logicalName = data.get("result")[0].get("name")
+            apply_logical_ssid(logicalName)
+        else:
+            print("Logical pod name is not defined")
+    except Exception as e:
+        log.debug("Exception raised in sync logical ssid {}".format(e))
 
 def on_log(client,userdata,level,buf):
      # log.debug("mqtt connection - {}".format(buf))
@@ -556,7 +641,7 @@ def on_subscribe(client, userdata, mid, granted_qos):
 #Get identity for the device from deviceslist dictionary.Then request is passed to the IOT gateway
 def on_message(client, userdata, msg):
     global iot_ip,cloudPodState,state,lockstate,cloudbeforePodState,beforePodState,intruderState
-    global podState,lightState,LOCK_TIMER
+    global podState,lightState,LOCK_TIMER,prePodState
     global DESIRED_TIMER,DEVICE_TIMER,GATEWAY_TIMER,POD_TIMER,SENSOR_TIMER,CONN_TIMER
 
     log.debug('Device received topic: {}, msg: {}'.format(msg.topic, str(msg.payload.decode("utf-8"))))
@@ -575,6 +660,7 @@ def on_message(client, userdata, msg):
                 desired = msgToJson.get("desired")
 
                 if "pod_state" in desired.keys():
+                    prePodState=podState
                     beforePodState = podState
                     log.debug("pod state updated by {}".format(podState))
                     log.debug("on message first,cloud before pod state -- {} ,cloud state is -- {}".format(cloudbeforePodState,cloudPodState))
@@ -603,7 +689,12 @@ def on_message(client, userdata, msg):
                     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                         "{\"pod_state\":\"" + podState + "\"}",
                                         qos=1)
-
+                if "ssid_reset" in desired.keys():
+                    sreset=desired.get("ssid_reset")
+                    if sreset.lower() == "yes":
+                        sync_logical_ssid()
+                    else:
+                        pass
                 if "light_state" in desired.keys():
                     state=desired.get("light_state")
                     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
@@ -793,7 +884,7 @@ def on_message(client, userdata, msg):
                 except Exception as e:
                     log.debug("exception in saving the pin {}".format(e))
             elif x == "pod_state":
-
+                prePodState = podState
                 beforePodState=podState
                 log.debug("pod state updated by {}".format(podState))
                 log.debug("on message first,cloud before pod state -- {} ,cloud state is -- {}".format(cloudbeforePodState,
@@ -808,6 +899,7 @@ def on_message(client, userdata, msg):
                     log.debug(" Admin In use,cloud pushed state is by passed")
                     pass
                 else:
+                    prePodState = podState
                     podState = y
                     if podState == "Reserved in Next 10 min" or podState == "Available in Next 10 min":
                         log.debug("pod state R10 or A10")
@@ -822,6 +914,12 @@ def on_message(client, userdata, msg):
                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                     "{\"pod_state\":\"" + podState + "\"}",
                                     qos=1)
+            elif x == "ssid_reset":
+                sreset = y
+                if sreset == "yes":
+                    sync_logical_ssid()
+                else:
+                    pass
             elif x == "lock_state":
 
                 lockstate = y
@@ -1098,7 +1196,7 @@ def change_to_state_color(startIndex):
 #Reported property for sensors is created like the following format { ":device name" : { ":property key" : ":value" } }
 def sensor_status(startIndex):
 
-   global total_devices,iot_ip,colorTemp,podState,intrusionDetection,beforePodState,intrusionDetectionTime,colorSat,colorHue
+   global total_devices,iot_ip,colorTemp,podState,intrusionDetection,beforePodState,intrusionDetectionTime,colorSat,colorHue,prePodState
    try:
        if (startIndex >= total_devices):
 
@@ -1772,7 +1870,7 @@ def start_server():
     return 0
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-    global podState,iot_ip,state,beforePodState,devicestatus,colorTemp,colorSat,colorHue,intruderState
+    global podState,iot_ip,state,beforePodState,devicestatus,colorTemp,colorSat,colorHue,intruderState,prePodState
 
     def do_GET(self):
         global lightState, lightColor, colorTemp, doorState, lockState,lightLevel,intruderState,state
@@ -1853,7 +1951,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         elif None != re.search('/podLightstate', self.path):
             try:
                 log.debug("pod state is {}   light state is {}".format(podState,state))
-                podstate = {"podState": podState , "lightState":state ,"prevpodState":beforePodState}
+                # podstate = {"podState": podState , "lightState":state ,"prevpodState":beforePodState}
+                podstate = {"podState": podState, "lightState": state, "prevpodState": prePodState}
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
@@ -1919,6 +2018,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         log.debug("POST request")
         global podState, prevPodState,group_id,state,beforePodState,intrusionDetection,intrusionDetectionTime,intrusion,lockstate,doorLockException,intruderState,reservePodState
+        global prePodState
         if None != re.search('/doorLock', self.path):
                 global podState
                 log.debug("/doorLock state of the pod is  {}".format(podState))
@@ -1966,7 +2066,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                        if reservePodState == "Reservation In Use":
                                            log.debug("Reservation user loging in when state is {}".format(podState))
                                            pass
-                                       else:
+                                       else :
                                            update_pod_state()
 
                                            # sensor_status(0)
@@ -2069,6 +2169,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                             prevPodState = podState
                             log.debug("Admin timer will trigger after {}".format(duration))
                             setTimeoutMinutes(int(duration), change_prev_pod_state)
+                            prePodState = podState
                             podState = "Admin In Use"
 
                             update_pod_state()
@@ -2123,6 +2224,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         if podState == "Reservation In Use":
                             pass
                         else:
+                            prePodState = podState
                             podState = "Reservation In Use"
                             mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                                 "{\"pod_state\":\"" + podState + "\"}",
@@ -2236,6 +2338,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                     pass
                                                 else:
                                                     prevPodState = podState
+                                                    prePodState = podState
                                                     log.debug("Admin timer will trigger after {}".format(duration))
                                                     setTimeoutMinutes(int(duration), change_prev_pod_state)
                                                     podState = "Admin In Use"
@@ -2332,7 +2435,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     data = json.loads(body)
                     if "state" in data.keys():
                         state=data.get("state")
-
+                        prePodState = podState
                         podState=state
                         if podState == state:
                             self.send_response(200)
@@ -2742,6 +2845,7 @@ def verifyAuth(pin):
                                     if (resp.status == 200):
 
                                         global podState
+                                        prePodState = podState
                                         if podState == "Admin In Use":
                                             tmpState = "Reservation in Use"
                                             #return 212
@@ -2749,6 +2853,7 @@ def verifyAuth(pin):
                                         if podState == "Reservation In Use":
                                             pass
                                         else:
+                                            prePodState = podState
                                             podState = "Reservation In Use"
                                             mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                                                 "{\"pod_state\":\"" + podState + "\"}",
