@@ -14,7 +14,8 @@ from threading import Thread
 from threading import Timer
 from threading import active_count
 from time import sleep
-from http.server import HTTPServer, BaseHTTPRequestHandler
+# from http.server import HTTPServer, BaseHTTPRequestHandler
+from server import HTTPServer, BaseHTTPRequestHandler
 from paho.mqtt import client as mqtt
 import cs
 import settings
@@ -112,18 +113,24 @@ hubName__j=cs.CSClient().get('/config/system/asset_id')
 podId__j=cs.CSClient().get('/config/system/system_id')
 podKey__j=cs.CSClient().get('/config/system/desc')
 
+iot_hub_name="Unknown"
+pod_id="Unknown"
+pod_key="Unknown"
 ports=settings.PORTS
 
 
 # MS Azure IoT Hub name
 # iot_hub_name='zenhub'
-iot_hub_name=hubName__j.get("data")
+if hubName__j != None:
+    iot_hub_name=hubName__j.get("data")
 # Device name in MS Azure IoT Hub
-pod_id=podId__j.get("data")
+if podId__j != None:
+    pod_id=podId__j.get("data")
 # SAS token for the device id. This can be generated using the Device Explorer Tool.
 # The format of the token should be similar to:
 # 'SharedAccessSignature sr={your hub name}.azure-devices.net%2Fdevices%2FMyDevice01%2Fapi-version%3D2016-11-14&sig=vSgHBMUG.....Ntg%3d&se=1456481802'
-pod_key=podKey__j.get("data")
+if podKey__j != None:
+    pod_key=podKey__j.get("data")
 
 #SAS token generator.expiry time for generated sas token is a day
 def generate_sas_token(uri, key, policy_name, expiry=86400):
@@ -231,6 +238,7 @@ def group():
 #Rule engine.Based on podState and state table provided by zenspace,it will change the state of sensors
 def group_light_change(colorcode):
    global LIGHTLEV,group_id
+   log.debug("on group light change ")
    try:
         dat = {"on": "true", "color": colorcode,"level":LIGHTLEV}
         data = json.dumps(dat).encode('utf-8')
@@ -242,6 +250,23 @@ def group_light_change(colorcode):
         resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
    except Exception as e:
        log.debug("Exception changing Group color {}".format(e))
+
+def trigger_group_light_change(colorcode):
+   global group_id
+   log.debug("on trigger group light change ")
+   try:
+        tdat = {"on": "true", "color": colorcode}
+
+        tdata = json.dumps(tdat).encode('utf-8')
+        # log.debug("Group color data is {} -- id - {}".format(tdata,group_id))
+
+        req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
+                                     headers=headers, data=tdata,
+                                     method="PUT")
+        resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
+   except Exception as e:
+       log.debug("Exception changing Group color on trigger {}".format(e))
+
 
 def group_blink(blinkcount):
    global group_id
@@ -640,7 +665,7 @@ def on_subscribe(client, userdata, mid, granted_qos):
 #Desired properties sent by the cloud is converted into json format.Key is the device name and value is operation need to perform.
 #Get identity for the device from deviceslist dictionary.Then request is passed to the IOT gateway
 def on_message(client, userdata, msg):
-    global iot_ip,cloudPodState,state,lockstate,cloudbeforePodState,beforePodState,intruderState
+    global iot_ip,cloudPodState,state,lockstate,cloudbeforePodState,beforePodState,intruderState,intrusionDetection
     global podState,lightState,LOCK_TIMER,prePodState
     global DESIRED_TIMER,DEVICE_TIMER,GATEWAY_TIMER,POD_TIMER,SENSOR_TIMER,CONN_TIMER
 
@@ -711,6 +736,9 @@ def on_message(client, userdata, msg):
                                         qos=1)
                 if "intruder_state" in desired.keys():
                     intruderState=desired.get("intruder_state")
+                    if intruderState == "disabled":
+                        intrusionDetection =0
+                        change_to_state_color(0)
                     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                         "{\"intruder_state\":\"" + intruderState + "\"}",
                                         qos=1)
@@ -934,6 +962,11 @@ def on_message(client, userdata, msg):
                                     qos=1)
             elif x == "intruder_state":
                 intruderState = y
+                #12/11/2019 fix for Disable intruder
+                if intruderState == "disabled":
+                    intrusionDetection =0
+                    change_to_state_color(0)
+                #############################
                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                     "{\"intruder_state\":\"" + intruderState + "\"}",
                                     qos=1)
@@ -1109,7 +1142,7 @@ def single_sensor_status(sensor_id):
 
 
 def change_to_state_color(startIndex):
-    # log.debug("change to state color fucntion begins")
+    log.debug("change to state color fucntion begins")
     global total_devices, iot_ip, podState, intrusionDetection, beforePodState, intrusionDetectionTime
     try:
         if (startIndex >= total_devices):
@@ -1146,6 +1179,7 @@ def change_to_state_color(startIndex):
                     color = 'red'
                 else:
                     color = 'white'
+                # log.debug("light color is {}  , state color {}".format(color,podState))
                 cTime = datetime.datetime.utcnow().replace(microsecond=0)
                 if cTime > intrusionDetectionTime:
                     diff = cTime - intrusionDetectionTime
@@ -1164,22 +1198,22 @@ def change_to_state_color(startIndex):
                         log.debug("intrusion detected,don't trigger color change")
                         pass
                 else:
-
+                    log.debug("color change")
                     if podState == "Available" and color != AVAILCOLOR and rxtime !=0:
                         log.debug("trigger color change-available")
-                        group_light_change(AVAILCOLOR)
+                        trigger_group_light_change(AVAILCOLOR)
                     elif podState == "Reserved" and color != RESERVECOLOR and rxtime !=0:
                         log.debug("trigger color change-reserved")
-                        group_light_change(RESERVECOLOR)
+                        trigger_group_light_change(RESERVECOLOR)
                     elif podState == "Admin In Use" and color != ADMININUSECOLOR and rxtime!=0:
                         log.debug("trigger color change-admin in use")
-                        group_light_change(ADMININUSECOLOR)
+                        trigger_group_light_change(ADMININUSECOLOR)
                     elif podState == "Reservation In Use" and color != RESERVEINUSECOLOR and rxtime !=0:
                         log.debug("trigger color change-reservation in use")
-                        group_light_change(RESERVEINUSECOLOR)
+                        trigger_group_light_change(RESERVEINUSECOLOR)
                     elif podState == "TimeOut" and color != TIMEOUTCOLOR and rxtime !=0:
                         log.debug("trigger color change-timeout")
-                        group_light_change(TIMEOUTCOLOR)
+                        trigger_group_light_change(TIMEOUTCOLOR)
 
 
 
@@ -1857,15 +1891,24 @@ def start_server():
     print('Starting Server: {}'.format(server_address))
     log.info('IPadServer started');
 
-    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
     # httpd.socket = ssl.wrap_socket(httpd.socket, certfile='./server.pem',server_side=True)
 
     try:
+        httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
+        log.debug("client address {} -- {}".format(httpd.server_name,httpd.server_address))
         httpd.serve_forever()
 
 
-    except KeyboardInterrupt:
+    except Exception as e:
         print('Stopping Server, Key Board interrupt')
+        log.debug("Exception in startig server 9001 {}".format(e))
+        data = {"type": "CRITICAL", "deviceType": "cradlepoint", "name": "9001 server",
+                "message": {"status": "Server is not running {}".format(e)}
+                }
+
+        mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                            json.dumps(data),
+                            qos=1)
 
     return 0
 
@@ -2499,14 +2542,14 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                         else:
                                             intrusion.append("intruder")
                                             log.debug("intrusion detected")
-                                            data = {"type": "INFO", "deviceType": "Webcam", "name": "intruder",
+                                            mdata = {"type": "INFO", "deviceType": "Webcam", "name": "intruder",
                                                     "message": {"status":"Intruder detected"}
                                                     }
                                             # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                             #                     "{\"intruder_alert\": \"Intruder detected \" }",
                                             #                     qos=1)
                                             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                                json.dumps(data),
+                                                                json.dumps(mdata),
                                                                 qos=1)
                                     elif hval == "no":
                                         if "intruder" in intrusion:
@@ -2524,7 +2567,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                 intrusionDetection=1
                                                 intrusionDetectionTime=datetime.datetime.utcnow().replace(microsecond=0)
 
-
+                                                log.debug("request body is {}".format(data))
                                                 req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                                                              headers=headers, data=json.dumps(data).encode('utf-8'),
                                                                              method="PUT")
@@ -2537,6 +2580,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
                                                     intrusionDetectionTime = datetime.datetime.utcnow().replace(
                                                         microsecond=0)
+                                                    log.debug("request body is {}".format(data))
                                                     req = urllib.request.Request(
                                                         url + iot_ip + '/groups/id/' + str(group_id),
                                                         headers=headers, data=json.dumps(data).encode('utf-8'),
@@ -3368,15 +3412,18 @@ try:
        log.debug("Unable to read from flash {}".format(e))
 
    if iot_hub_name !=None and pod_key !=None and pod_id !=None:
-    mqtt_client.username_pw_set(username=iot_hub_name + '.azure-devices.net/' + pod_id+'/api-version=2018-06-30', password=generate_sas_token(iot_hub_name+".azure-device.net/devices"+pod_id,pod_key,pod_id))
+    try:
+        mqtt_client.username_pw_set(username=iot_hub_name + '.azure-devices.net/' + pod_id+'/api-version=2018-06-30', password=generate_sas_token(iot_hub_name+".azure-device.net/devices"+pod_id,pod_key,pod_id))
 
-    mqtt_client.tls_set(ca_certs=path_to_root_cert, certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED,
-                        tls_version=ssl.PROTOCOL_TLSv1, ciphers=None)
+        mqtt_client.tls_set(ca_certs=path_to_root_cert, certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED,
+                            tls_version=ssl.PROTOCOL_TLSv1, ciphers=None)
 
-    mqtt_client.tls_insecure_set(False)
+        mqtt_client.tls_insecure_set(False)
 
-    log.debug("Connecting to hub")
-    mqtt_client.connect(iot_hub_name + '.azure-devices.net', port=8883,keepalive=90)
+        log.debug("Connecting to hub")
+        mqtt_client.connect(iot_hub_name + '.azure-devices.net', port=8883,keepalive=90)
+    except Exception as e:
+        log.debug("Exception in connecting to hub {}".format(e))
 
     # _thread.start_new_thread(mqtt_connect,())
     log.debug("hub connected")

@@ -4,7 +4,8 @@ import time
 import urllib.request
 import datetime
 import sys
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+# from http.server import HTTPServer, SimpleHTTPRequestHandler
+from server import HTTPServer, SimpleHTTPRequestHandler
 from threading import Thread
 from time import sleep
 import cs
@@ -45,13 +46,26 @@ def start_server():
     log.info('Zenspace hotspot server started');
 
 
-    httpd = HTTPServer(server_address, WebServerRequestHandler)
+
 
     try:
+        httpd = HTTPServer(server_address, WebServerRequestHandler)
         httpd.serve_forever()
 
-    except KeyboardInterrupt:
+    except Exception as e:
         print('Stopping Server, Key Board interrupt')
+        log.debug("Exception raised in 9002 server {}".format(e))
+        try:
+            dat = {"type": "CRITICAL", "deviceType": "cradlepoint", "name": "9002 server",
+                    "message": {"status": "Server is not running {}".format(e)}
+                    }
+
+            data = json.dumps(dat).encode("utf-8")
+            req = urllib.request.Request(url + "/eventhub", headers=headers, data=data,
+                                         method="PUT")
+            resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+        except Exception as e:
+            log.debug("Exception raised in ticket raises {}".format(e))
 
     return 0
 
