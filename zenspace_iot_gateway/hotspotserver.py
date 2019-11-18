@@ -473,7 +473,7 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                     self.send_header('Access-Control-Allow-Headers',
                                                      'Content-Type, X-Requested-with')
                                     self.end_headers()
-                                    self.wfile.write(bytes(json.dumps({"success": "timeout"}), 'utf-8'))
+                                    self.wfile.write(bytes(json.dumps({"success": "exceed"}), 'utf-8'))
                             else:
                                 self.send_response(401)
                                 self.send_header('Content-type', 'application/json')
@@ -535,7 +535,7 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                         self.send_header('Acess-Control-Allow-Methods', 'GET, POST, OPTIONS')
                                         self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-with')
                                         self.end_headers()
-                                        self.wfile.write(bytes(json.dumps({"success": "timeout"}), 'utf-8'))
+                                        self.wfile.write(bytes(json.dumps({"success": "exceed"}), 'utf-8'))
 
 
                                 else:
