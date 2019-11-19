@@ -38,7 +38,7 @@ CHANGE_TO_STATE_COLOR_TIMER=30
 SENSOR_OFFLINE_TIMER=900
 INTURSION_CHECK_TIMER=900
 cameraKeepAliveTimer=30
-unlockKeepAliveTimer=30
+unlockKeepAliveTimer=3600
 zenspaceKeepAliveTimer=30
 #Global variable
 log = AppLogger()
@@ -2320,7 +2320,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
                 # sensor_status(0)
                 unlockKeepAlive= datetime.datetime.utcnow().replace(microsecond=0)
-                log.debug(" Keep alive timestamp -{]".format(unlockKeepAlive))
+                log.debug(" Keep alive timestamp -{}".format(unlockKeepAlive))
                 self.send_response(200)
                 self.send_header('Content-Type','application/json')
                 self.end_headers()
@@ -2336,7 +2336,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
                 # sensor_status(0)
                 cameraKeepAlive= datetime.datetime.utcnow().replace(microsecond=0)
-                log.debug(" Keep alive timestamp -{]".format(cameraKeepAlive))
+                log.debug(" Keep alive timestamp -{}".format(cameraKeepAlive))
                 self.send_response(200)
                 self.send_header('Content-Type','application/json')
                 self.end_headers()
