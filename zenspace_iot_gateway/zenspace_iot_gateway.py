@@ -1863,10 +1863,10 @@ def health_monitoring():
                             else:
                                 unreachable_host.append(host)
                                 if hostname.__contains__("GATEWAY"):
-                                    data = {"type": "CRITICAL", "deviceType": "IOTgateway", "name": hostname,
+                                    data = {"type": "WARNING", "deviceType": "IOTgateway", "name": hostname,
                                         "message": {"status":"Ping request failed ","host":host,"reason":result['data']['result']}}
                                 else:
-                                    data = {"type": "CRITICAL", "deviceType": "Zenspace devices", "name": hostname,
+                                    data = {"type": "WARNING", "deviceType": "Zenspace devices", "name": hostname,
                                             "message": {"status":"Ping request failed" ,"host":host,"reason":result['data']['result']}
                                             }
 
@@ -1915,6 +1915,9 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
     except Exception as e:
         log.debug("Exception raised in conn_type {}".format(e))
     sensorList=[]
+
+
+
     try:
         currenttime=datetime.datetime.utcnow().replace(microsecond=0)
         if unlockKeepAlive > currenttime:
@@ -1932,6 +1935,15 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
         else:
             cameradiff = currenttime - cameraKeepAlive
 
+        # '''
+        #          Ping Status      App Keepalive      App status
+        #           YES                > time diff       UNLOCK
+        #           NO                 > time diff        UNREACHABLE
+        #           NO                  < TIME DIFF       PING
+        #          YES                < time diff       REACHABLE
+        #     '''
+
+
         if unlockHost == "0.0.0.0":
             externalState = "NOT RESERVED"
         else:
@@ -1944,6 +1956,19 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
                 externalState = "PING"
             else:
                 externalState = "REACHABLE"
+
+         # '''
+         # Ping Status      App Keep Alive  camera App keep alive    App Status
+         #     YES            > time diff     > time diff              ZenCam ( Both Apps)
+         #     YES            > time diff      < time diff             ZenSpace
+         #     YES            < time diff       >time diff             CAMERA
+         #     YES            < time diff       <time diff             REACHABLE
+         #     NO             > time diff       > time diff             UNREACHABLE
+         #     NO             > time diff       < time diff             PINGZEN
+         #     NO             < time diff       > time diff             PINGC
+         #     NO             <time diff        < time diff             PING
+         # '''
+
 
         if internalHost == "0.0.0.0":
             internalState = "NOT RESERVED"
@@ -1980,6 +2005,15 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
                     else:
                         internalState="REACHABLE"
 
+
+
+        #'''
+        #   PING    SERVER
+        #   YES      ok         REACHABLE
+        #   YES      notok      IOTSERVER
+        #   NO       ok         PING
+        #   NO       notok      UNREACHABLE
+        #'''
         if iotHost == "0.0.0.0":
             iotGatewayState = "NOT RESERVED"
         else:
