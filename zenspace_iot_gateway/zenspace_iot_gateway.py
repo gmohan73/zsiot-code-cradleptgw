@@ -76,7 +76,9 @@ colorHue=0
 lightState="Unknown"
 lightColor="Unknown"
 doorState="Unknown"
-
+teamViewerState="false"
+zensapceState="false"
+airServerState="false"
 tmpState=''
 lightLevel=0
 healthFlag=0
@@ -302,6 +304,30 @@ def group_blink(blinkcount):
 
    except Exception as e:
        log.debug("Exception blinking Group color {}".format(e))
+
+
+def redblink():
+
+   try:
+
+     while (True):
+         if intrusionDetection == 1:
+            group_blink(1)
+         else:
+             break
+         sleep(2)
+   except Exception as e:
+       log.debug("Exception red blinking Group color {}".format(e))
+
+
+
+
+
+
+
+
+
+
 
 def update_pod_state():
     global podState,iot_ip,state
@@ -746,6 +772,7 @@ def on_message(client, userdata, msg):
                     intruderState=desired.get("intruder_state")
                     if intruderState == "disabled":
                         intrusionDetection =0
+                        log.debug(" Intruder state in desired properties")
                         change_to_state_color(0)
                     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                         "{\"intruder_state\":\"" + intruderState + "\"}",
@@ -979,6 +1006,7 @@ def on_message(client, userdata, msg):
                 #12/11/2019 fix for Disable intruder
                 if intruderState == "disabled":
                     intrusionDetection =0
+                    log.debug(" Intruder state on message")
                     change_to_state_color(0)
                 #############################
                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
@@ -1156,14 +1184,16 @@ def single_sensor_status(sensor_id):
 
 
 def change_to_state_color(startIndex):
-    log.debug("change to state color fucntion begins")
+
     global total_devices, iot_ip, podState, intrusionDetection, beforePodState, intrusionDetectionTime
     try:
+
         if (startIndex >= total_devices):
             # log.debug("change to state color ends")
             return 1
         srid = '4'
-
+        log.debug("change to state color fucntion begins")
+        log.debug(" Start Index -{}  Total devices -{}".format(startIndex, total_devices))
         response = urllib.request.urlopen(url + iot_ip + '/devices/status?startIndex=' + str(startIndex),
                                           timeout=URL_TIMEOUT)
         respData = response.read();
@@ -1909,6 +1939,7 @@ def health_monitoring():
 
 def app_healthcheck(iotHost,unlockHost,internalHost):
     global unlockKeepAlive,unlockKeepAliveTimer,unreachable_host,podState,zenspaceKeepAlive,zenspaceKeepAliveTimer,cameraKeepAlive,cameraKeepAliveTimer
+    global zenspaceState,teamViewerState,airServerState
     conn_type=""
     try:
         conn_type = cs.CSClient().get("/status/wan/primary_device").get("data")
@@ -1967,21 +1998,36 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
          #     NO             > time diff       < time diff             PINGZEN
          #     NO             < time diff       > time diff             PINGC
          #     NO             <time diff        < time diff             PING
+         #     YES             UNINSTALLED      >time diff              ZENUNCAM
+         #     YES             UNINSTALLED      <time diff              ZENSPACEUN
+         #     NO              UNINSTALLED      >time diff              PINGCAMZENUN
+         #     NO              UNINSTALLED      <time diff              PINGZENUN
          # '''
 
+        if int(zenspacediff.seconds) > zenspaceKeepAliveTimer:
+            zenstate = "yes"
+        else:
+            zenstate = "no"
+        if int(cameradiff.seconds) > cameraKeepAliveTimer:
+            camstate = "yes"
+        else:
+            camstate = "no"
 
         if internalHost == "0.0.0.0":
             internalState = "NOT RESERVED"
-        else:
-            if int(zenspacediff.seconds) > zenspaceKeepAliveTimer:
-                zenstate="yes"
+        elif zenspaceState.lower() == "false":
+            if internalHost in unreachable_host:
+                if camstate == "yes":
+                    internalState = "PINGCAMZENUN"
+                else:
+                    internalState="PINGZENUN"
             else:
-                zenstate="no"
-            if int(cameradiff.seconds) > cameraKeepAliveTimer:
-                camstate="yes"
-            else:
-                camstate="no"
+                if camstate == "yes":
+                    internalState = "ZENUNCAM"
+                else:
+                    internalState = "ZENSPACEUN"
 
+        else:
             if internalHost in unreachable_host:
                 if zenstate == "yes":
                     if camstate == "yes":
@@ -2039,8 +2085,20 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
                 else:
                     iotGatewayState = "IOTSERVER"
 
+
+        if teamViewerState.lower() == "true":
+            tstate="INSTALLED"
+        else:
+            tstate = "NOT INSTALLED"
+
+        if airServerState.lower() == "true":
+            astate = "INSTALLED"
+        else:
+            astate = "NOT INSTALLED"
+
         sensor=sensor_check()
-        data={"type":"INFO","deviceType":"MONITOR","name":"monitor","message":{"podstate": podState,"connType":conn_type,"iotGateway":iotGatewayState,"external":externalState,"internal":internalState,"sensors":sensor}}
+
+        data={"type":"INFO","deviceType":"MONITOR","name":"monitor","message":{"podstate": podState,"connType":conn_type,"iotGateway":iotGatewayState,"external":externalState,"internal":internalState,"teamviewer":tstate,"airserver":astate,"sensors":sensor}}
         mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(data),qos=1)
     except Exception as e:
         log.debug("Exception raises in app_helathcheck - {}".format(e))
@@ -2330,21 +2388,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.send_response(503)
                 self.end_headers()
 
-        elif None != re.search('/camerakeepalive',self.path):
-            try:
-
-
-                # sensor_status(0)
-                cameraKeepAlive= datetime.datetime.utcnow().replace(microsecond=0)
-                log.debug(" Keep alive timestamp -{}".format(cameraKeepAlive))
-                self.send_response(200)
-                self.send_header('Content-Type','application/json')
-                self.end_headers()
-                self.wfile.write(b'Success')
-            except Exception as e:
-                log.debug("Exception occurs in get /camerakeepalive --{}".format(e))
-                self.send_response(503)
-                self.end_headers()
 
 
         elif None != re.search('/pod/LightDoorstate',self.path):
@@ -2413,6 +2456,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
     def do_PUT(self):
+        global teamViewerState,zenspaceState,cameraKeepAlive,airServerState
         log.debug("PUT request")
         erid="2000"
         if None != re.search('/eventhub', self.path):
@@ -2447,6 +2491,51 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
                         log.debug(" 412 bad request")
+
+        elif None != re.search('/camerakeepalive',self.path):
+            if 'Content-Type' in self.headers:
+                type = self.headers['Content-Type']
+                if type == "application/json":
+                    try:
+                        cameraKeepAlive = datetime.datetime.utcnow().replace(microsecond=0)
+                        log.debug(" Keep alive timestamp -{}".format(cameraKeepAlive))
+                        content_length = int(self.headers['Content-Length'])
+
+                        body = self.rfile.read(content_length)
+                        data = json.loads(body)
+                        log.debug(body)
+                        if "teamviewer" in data.keys():
+                            teamViewerState = data.get("teamviewer")
+                        if "zenspace" in data.keys():
+                            zenspaceState=data.get("zenspace")
+                        if "airserver" in data.keys():
+                            airServerState=data.get("airserver")
+
+
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(b'Success')
+                    except Exception as e:
+                        res = "412,bad request-{}".format(e)
+                        log.debug("Exception raised in /eventhub post request {}".format(e))
+                        self.send_response(412)
+                        self.end_headers()
+                        self.wfile.write(b'BAD Request')
+                else:
+                    res = "415,bad request"
+                    self.send_response(415)
+                    self.end_headers()
+                    self.wfile.write(b'BAD Request')
+                    log.debug(" 415 bad request")
+            else:
+                res = "412 ,Bad request"
+                self.send_response(412)
+                self.end_headers()
+                self.wfile.write(b'BAD Request')
+                log.debug(" 412 bad request")
+
+
+
         else:
             log.debug("Invalid url");
             self.send_response(404);
@@ -2968,10 +3057,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                                              headers=headers, data=json.dumps(data).encode('utf-8'),
                                                                              method="PUT")
                                                 resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
+                                                #####Redblink
+                                                setTimeout(5, redblink)
 
                                             elif podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min":
                                                 # if prevPodState == "Available" or prevPodState == "Reserved":
-                                                if beforePodState == "Available" or beforePodState == "Reserved":
+                                                if beforePodState == "Available":
                                                     intrusionDetection=1
 
                                                     intrusionDetectionTime = datetime.datetime.utcnow().replace(
@@ -2982,13 +3073,13 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                         headers=headers, data=json.dumps(data).encode('utf-8'),
                                                         method="PUT")
                                                     resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
+                                                    #####Redblink
+                                                    setTimeout(5, redblink)
                                         else:
                                             if podState == "Available":
                                                 intrusionDetection=0
                                                 group_light_change(AVAILCOLOR)
-                                            elif podState == "Reserved":
-                                                intrusionDetection=0
-                                                group_light_change(RESERVECOLOR)
+
 
                                             # if podState == "Available in Next 10 min" and prevPodState == "Reserved":
                                             #     group_light_change(RESERVECOLOR)
@@ -2997,15 +3088,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                             # elif podState == "Reserved in Next 10 min" and prevPodState == "Reserved":
                                             #     group_light_change(RESERVECOLOR)
 
-                                            if podState == "Available in Next 10 min" and beforePodState == "Reserved":
-                                                intrusionDetection=0
-                                                group_light_change(RESERVECOLOR)
-                                            elif podState == "Reserved in Next 10 min" and beforePodState == "Available":
+                                            if podState == "Reserved in Next 10 min" and beforePodState == "Available":
                                                 intrusionDetection=0
                                                 group_light_change(AVAILCOLOR)
-                                            elif podState == "Reserved in Next 10 min" and beforePodState == "Reserved":
-                                                intrusionDetection=0
-                                                group_light_change(RESERVECOLOR)
+
 
 
 
