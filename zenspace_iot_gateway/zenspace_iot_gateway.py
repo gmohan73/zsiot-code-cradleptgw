@@ -94,6 +94,7 @@ unreachable_host = []
 offlineDevices=[];
 intrusionDetection=0;
 intrusion=[];
+grpmembers=[];
 conn_type=""
 cpOnlineTime=datetime.datetime.utcnow().replace(microsecond=0)
 ppOnlineTime=datetime.datetime.utcnow().replace(microsecond=0)
@@ -122,6 +123,10 @@ path_to_root_cert = os.path.join(os.getcwd(), 'certs.cer')
 hubName__j=cs.CSClient().get('/config/system/asset_id')
 podId__j=cs.CSClient().get('/config/system/system_id')
 podKey__j=cs.CSClient().get('/config/system/desc')
+
+cs.CSClient().put("/control/ping/start/host","")
+cs.CSClient().put("/control/ping/start/size",64)
+cs.CSClient().put("/control/ping/start/num",4)
 
 iot_hub_name="Unknown"
 pod_id="Unknown"
@@ -247,7 +252,10 @@ def group():
 
 #Rule engine.Based on podState and state table provided by zenspace,it will change the state of sensors
 def group_light_change(colorcode):
-   global LIGHTLEV,group_id
+   global LIGHTLEV,group_id,podState,intrusionDetection
+   if podState == "Reservation In Use" or podState == "Admin In Use":
+       intrusionDetection =0
+
    log.debug("on group light change ")
    try:
         dat = {"on": "true", "color": colorcode,"level":LIGHTLEV}
@@ -262,8 +270,11 @@ def group_light_change(colorcode):
        log.debug("Exception changing Group color {}".format(e))
 
 def trigger_group_light_change(colorcode):
-   global group_id
+   global group_id,podState,intrusionDetection
    log.debug("on trigger group light change ")
+   if podState == "Reservation In Use" or podState == "Admin In Use":
+       intrusionDetection = 0
+
    try:
         tdat = {"on": "true", "color": colorcode}
 
@@ -307,18 +318,47 @@ def group_blink(blinkcount):
 
 
 def redblink():
-
+   global grpmembers,intrusionDetection
    try:
+       log.debug(" Inside red blink -{}".format(grpmembers))
+       if len(grpmembers) == 0:
+           res = urllib.request.urlopen(url + iot_ip + '/groups/id/' + str(group_id), timeout=URL_TIMEOUT)
+           group = json.loads(res.read())
+           print(group)
+           if "group" in group.keys():
+               gr = group.get("group")
+               if gr != None:
+                   grpmembers = gr.get("list")
+                   log.debug(" Group members-{}".format(grpmembers))
 
-     while (True):
-         if intrusionDetection == 1:
-            group_blink(1)
-         else:
-             break
-         sleep(2)
+       while (True):
+             if intrusionDetection == 1:
+                #group_blink(1)
+                 identify_blink()
+             else:
+
+                 break
+             sleep(8)
+
    except Exception as e:
        log.debug("Exception red blinking Group color {}".format(e))
 
+
+
+def identify_blink():
+            global grpmembers
+            log.debug("Inside identify blink -{}".format(grpmembers))
+            dat = {"command": "identify", "duration": 5}
+            body = json.dumps(dat).encode('utf-8')
+            for i in grpmembers:
+                print(i)
+                try:
+                    req = urllib.request.Request(url + iot_ip + '/devices/' + i,headers=headers, data=body, method="PUT")
+                    resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+                    log.debug( " Response is -{}".format(resp))
+
+                except Exception as e:
+                    log.debug("Exception in identify blink -{}".format(e))
 
 
 
@@ -586,6 +626,8 @@ def apply_logical_ssid(logicalName):
                     uid = s.__getitem__('uid')
 
                     j = 0
+
+
                     if (type != "ethernet"):
                         print(type, ": ", uid)
                         for r in radios:
@@ -1193,7 +1235,7 @@ def change_to_state_color(startIndex):
             return 1
         srid = '4'
         log.debug("change to state color fucntion begins")
-        log.debug(" Start Index -{}  Total devices -{}".format(startIndex, total_devices))
+        #log.debug(" Start Index -{}  Total devices -{}".format(startIndex, total_devices))
         response = urllib.request.urlopen(url + iot_ip + '/devices/status?startIndex=' + str(startIndex),
                                           timeout=URL_TIMEOUT)
         respData = response.read();
@@ -1231,7 +1273,7 @@ def change_to_state_color(startIndex):
                     diff = intrusionDetectionTime - cTime
                 diffSeconds = diff.seconds;
                 # log.debug("name -{} ,cTime - {} ,inTime - {} , diff - {}".format(name,cTime,intrusionDetectionTime,diffSeconds))
-                if intrusionDetection == 1 and (podState == "Available") and int(
+                if intrusionDetection == 1 and (podState == "Available" or podState == "Reserved") and int(
                         diffSeconds) < INTURSION_CHECK_TIMER:
                     log.debug("intrusion detected,don't trigger color change")
                     pass
@@ -1846,6 +1888,96 @@ def offline_online_check():
         log.debug("Exception - offline online check {} ".format(e))
 
 
+# def health_monitoring():
+#     global unreachable_host,healthFlag
+#     if healthFlag == 1:
+#         pass
+#     else:
+#         healthFlag = 1
+#         iotHost=internalHost=unlockHost="0.0.0.0"
+#         log.debug("unreachable hosts = {}".format(unreachable_host))
+#         try:
+#             mac_list = cs.CSClient().get('/config/dhcpd/reserve').get('data')
+#
+#             if (mac_list != None):
+#                 if (len(mac_list) > 0):
+#                     if "all" in unreachable_host:
+#                         unreachable_host.remove("all")
+#                     for item in mac_list:
+#                         host = item["ip_address"]
+#                         hostname=item["hostname"]
+#                         if hostname.upper().__contains__("UNLOCK"):
+#                             unlockHost = host
+#                         if hostname.upper().__contains__("GATEWAY"):
+#                             iotHost = host
+#                         if hostname.upper().__contains__("WIN"):
+#                             internalHost=host
+#                         cstore = cs.CSClient()
+#                         cstore.put('control/ping/start/host', host)
+#                         cstore.put('control/ping/start/size', 64)
+#
+#                         print('ping host: %s', host)
+#                         result = {}
+#                         try_count = 0;
+#
+#                         while try_count < 3:
+#                             result = cstore.get('control/ping')
+#                             if result.get('data') and result.get('data').get('status') in ["error", "done"]:
+#                                 break
+#                             time.sleep(5)
+#                             try_count += 1
+#
+#                         error_str = ""
+#                         if try_count == 3 or not result.get('data') or result.get('data').get('status') != "done":
+#                             error_str = "An error occurred"
+#                             if host in unreachable_host:
+#                               pass
+#                             else:
+#                                 unreachable_host.append(host)
+#                                 if hostname.__contains__("GATEWAY"):
+#                                     data = {"type": "WARNING", "deviceType": "IOTgateway", "name": hostname,
+#                                         "message": {"status":"Ping request failed ","host":host,"reason":result['data']['result']}}
+#                                 else:
+#                                     data = {"type": "WARNING", "deviceType": "Zenspace devices", "name": hostname,
+#                                             "message": {"status":"Ping request failed" ,"host":host,"reason":result['data']['result']}
+#                                             }
+#
+#
+#                                 # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+#                                 #                     "{\"health_monitor\": \""+host + " - "+ hostname+" ping request failed \" }",
+#                                 #                     qos=1)
+#                                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+#                                                     json.dumps(data),
+#                                                     qos=1)
+#                         if result.get('data').get('status') == "done":
+#                             if host in unreachable_host:
+#                                 unreachable_host.remove(host)
+#
+#                         log.debug("ping result:  FOR host %s  %s\n%s", host, error_str, result['data']['result'])
+#             else:
+#                 if "all" in unreachable_host:
+#                     pass
+#                 else:
+#                     unreachable_host.append("all")
+#                     data = {"type": "CRITICAL", "deviceType": "Zenspace devices", "name":"All devices" ,
+#                             "message": {"status":"No device found"}
+#                             }
+#                     # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+#                     #                     "{\"health_monitor\": \"MAC address is not found\" }",
+#                     #                     qos=1)
+#                     mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+#                                         json.dumps(data),
+#                                         qos=1)
+#
+#                 # log.info("ping result: %s\n%s", error_str)
+#             app_healthcheck(iotHost,unlockHost,internalHost)
+#             log.debug(" UnReachable host - {}".format(unreachable_host))
+#             healthFlag=0
+#         except Exception as e:
+#             log.debug("Exception raised in health monitoring = {}".format(e))
+#             healthFlag=0
+
+
 def health_monitoring():
     global unreachable_host,healthFlag
     if healthFlag == 1:
@@ -1853,7 +1985,7 @@ def health_monitoring():
     else:
         healthFlag = 1
         iotHost=internalHost=unlockHost="0.0.0.0"
-        log.debug("unreachable hosts = {}".format(unreachable_host))
+        print("unreachable hosts = {}".format(unreachable_host))
         try:
             mac_list = cs.CSClient().get('/config/dhcpd/reserve').get('data')
 
@@ -1864,75 +1996,84 @@ def health_monitoring():
                     for item in mac_list:
                         host = item["ip_address"]
                         hostname=item["hostname"]
-                        if hostname.__contains__("UNLOCK"):
+                        if hostname.upper().__contains__("UNLOCK"):
                             unlockHost = host
-                        if hostname.__contains__("GATEWAY"):
+                        if hostname.upper().__contains__("GATEWAY"):
                             iotHost = host
-                        if hostname.__contains__("INTERNAL"):
+                        if hostname.upper().__contains__("WIN"):
                             internalHost=host
                         cstore = cs.CSClient()
-                        cstore.put('control/ping/start/host', host)
-                        cstore.put('control/ping/start/size', 64)
+
+
 
                         print('ping host: %s', host)
                         result = {}
                         try_count = 0;
 
+
                         while try_count < 3:
-                            result = cstore.get('control/ping')
-                            if result.get('data') and result.get('data').get('status') in ["error", "done"]:
-                                break
+                            r=cstore.put('control/ping/start/host', host)
+                            print("response is {}".format(r))
                             time.sleep(5)
+                            result = cstore.get('control/ping')
+                            print("result is {}".format(result.get('data').get('status')))
+
+                            if result.get('data') and result.get('data').get('status') in ["running"]:
+                                time.sleep(4)
+                                result = cstore.get('control/ping')
+
+
+                            print("\n\n\t\t {}".format(result.get('data').get('status')))
+                            if result.get('data') and result.get('data').get('status') in ["done"]:
+                                    break
+
                             try_count += 1
 
                         error_str = ""
-                        if try_count == 3 or not result.get('data') or result.get('data').get('status') != "done":
+                        if try_count == 3 and result.get('data').get('status') == "error":
                             error_str = "An error occurred"
                             if host in unreachable_host:
                               pass
                             else:
                                 unreachable_host.append(host)
+                           #     print("\n\nresult is"+ host+"--"+result['data']['result'])
                                 if hostname.__contains__("GATEWAY"):
+                                    print("hello")
                                     data = {"type": "WARNING", "deviceType": "IOTgateway", "name": hostname,
                                         "message": {"status":"Ping request failed ","host":host,"reason":result['data']['result']}}
                                 else:
                                     data = {"type": "WARNING", "deviceType": "Zenspace devices", "name": hostname,
                                             "message": {"status":"Ping request failed" ,"host":host,"reason":result['data']['result']}
                                             }
-
-
-                                # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                #                     "{\"health_monitor\": \""+host + " - "+ hostname+" ping request failed \" }",
-                                #                     qos=1)
                                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                    json.dumps(data),
-                                                    qos=1)
+                                                                                    json.dumps(data),
+                                                                                    qos=1)
+
+
                         if result.get('data').get('status') == "done":
                             if host in unreachable_host:
                                 unreachable_host.remove(host)
 
-                        log.debug("ping result:  FOR host %s  %s\n%s", host, error_str, result['data']['result'])
+                        print("ping result:  FOR host {}  {}\n{}".format( host, error_str, result['data']['result']))
+                        time.sleep(4)
             else:
                 if "all" in unreachable_host:
+
+
                     pass
                 else:
                     unreachable_host.append("all")
                     data = {"type": "CRITICAL", "deviceType": "Zenspace devices", "name":"All devices" ,
                             "message": {"status":"No device found"}
                             }
-                    # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                    #                     "{\"health_monitor\": \"MAC address is not found\" }",
-                    #                     qos=1)
-                    mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                        json.dumps(data),
-                                        qos=1)
+                    mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(data),qos=1)
 
-                # log.info("ping result: %s\n%s", error_str)
-            app_healthcheck(iotHost,unlockHost,internalHost)
-            log.debug(" UnReachable host - {}".format(unreachable_host))
+
+            app_healthcheck(iotHost, unlockHost, internalHost)
+            print(" UnReachable host - {}".format(unreachable_host))
             healthFlag=0
         except Exception as e:
-            log.debug("Exception raised in health monitoring = {}".format(e))
+            print("Exception raised in health monitoring = {}".format(e))
             healthFlag=0
 
 
@@ -1946,6 +2087,8 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
     except Exception as e:
         log.debug("Exception raised in conn_type {}".format(e))
     sensorList=[]
+
+
 
 
 
@@ -1988,21 +2131,21 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
             else:
                 externalState = "REACHABLE"
 
-         # '''
-         # Ping Status      App Keep Alive  camera App keep alive    App Status
-         #     YES            > time diff     > time diff              ZenCam ( Both Apps)
-         #     YES            > time diff      < time diff             ZenSpace
-         #     YES            < time diff       >time diff             CAMERA
-         #     YES            < time diff       <time diff             REACHABLE
-         #     NO             > time diff       > time diff             UNREACHABLE
-         #     NO             > time diff       < time diff             PINGZEN
-         #     NO             < time diff       > time diff             PINGC
-         #     NO             <time diff        < time diff             PING
-         #     YES             UNINSTALLED      >time diff              ZENUNCAM
-         #     YES             UNINSTALLED      <time diff              ZENSPACEUN
-         #     NO              UNINSTALLED      >time diff              PINGCAMZENUN
-         #     NO              UNINSTALLED      <time diff              PINGZENUN
-         # '''
+        '''
+         Ping Status      App Keep Alive  camera App keep alive    App Status
+             YES            > time diff     > time diff              ZenCam ( Both Apps)
+             YES            > time diff      < time diff             ZenSpace
+             YES            < time diff       >time diff             CAMERA
+             YES            < time diff       <time diff             REACHABLE
+             NO             > time diff       > time diff             UNREACHABLE
+             NO             > time diff       < time diff             PINGZEN
+             NO             < time diff       > time diff             PINGC
+             NO             <time diff        < time diff             PING
+             YES             UNINSTALLED      >time diff              ZENUNCAM
+             YES             UNINSTALLED      <time diff              ZENSPACEUN
+             NO              UNINSTALLED      >time diff              PINGCAMZENUN
+             NO              UNINSTALLED      <time diff              PINGZENUN
+        '''
 
         if int(zenspacediff.seconds) > zenspaceKeepAliveTimer:
             zenstate = "yes"
@@ -3061,8 +3204,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                 setTimeout(5, redblink)
 
                                             elif podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min":
-                                                # if prevPodState == "Available" or prevPodState == "Reserved":
-                                                if beforePodState == "Available":
+                                                 if prevPodState == "Available" or prevPodState == "Reserved":
+                                                #if beforePodState == "Available":
                                                     intrusionDetection=1
 
                                                     intrusionDetectionTime = datetime.datetime.utcnow().replace(
@@ -3076,20 +3219,22 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                     #####Redblink
                                                     setTimeout(5, redblink)
                                         else:
+                                            intrusionDetection=0
+
                                             if podState == "Available":
-                                                intrusionDetection=0
                                                 group_light_change(AVAILCOLOR)
+                                            if podState == "Reserved":
+                                                group_light_change(RESERVECOLOR)
 
-
-                                            # if podState == "Available in Next 10 min" and prevPodState == "Reserved":
-                                            #     group_light_change(RESERVECOLOR)
+                                            if podState == "Available in Next 10 min" and prevPodState == "Reserved":
+                                                 group_light_change(RESERVECOLOR)
                                             # elif podState == "Reserved in Next 10 min" and prevPodState == "Available":
                                             #     group_light_change(AVAILCOLOR)
-                                            # elif podState == "Reserved in Next 10 min" and prevPodState == "Reserved":
-                                            #     group_light_change(RESERVECOLOR)
+                                            elif podState == "Reserved in Next 10 min" and prevPodState == "Reserved":
+                                                 group_light_change(RESERVECOLOR)
 
                                             if podState == "Reserved in Next 10 min" and beforePodState == "Available":
-                                                intrusionDetection=0
+                                                
                                                 group_light_change(AVAILCOLOR)
 
 
@@ -3110,6 +3255,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                 self.wfile.write(json.dumps(data).encode("utf-8"))
                         except Exception as e:
                             intrusionDetection=0
+
                             log.debug("exception raised in /pod/intrusion request {}".format(e))
                             self.send_response(412)
                             self.end_headers()
