@@ -76,9 +76,10 @@ colorHue=0
 lightState="Unknown"
 lightColor="Unknown"
 doorState="Unknown"
-teamViewerState="false"
-zensapceState="false"
-airServerState="false"
+teamViewerState="Unknown"
+zenspaceState="Unknown"
+airServerState="Unknown"
+
 tmpState=''
 lightLevel=0
 healthFlag=0
@@ -165,7 +166,7 @@ def set_state_color():
     global state,AVAILCOLOR,RESERVECOLOR,TIMEOUTCOLOR,ADMININUSECOLOR,RESERVEINUSECOLOR,AVAILINBLINK,RESERVEINBLINK,group_id,tmpState
 
 
-    log.debug("setting state color - {} ".format(state))
+    # log.debug("setting state color - {} ".format(state))
 
     if state == "enabled":
         AVAILCOLOR = "green"
@@ -217,7 +218,7 @@ def group():
                 if locationid > 1:
                     if "demolocation" in offlineDevices:
                         offlineDevices.remove("demolocation")
-                        log.debug("light group location id is greater than 1")
+                        log.warning("light group location id is greater than 1")
                 else:
                     if "demolocation" in offlineDevices:
                         pass
@@ -230,11 +231,11 @@ def group():
                         mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data),
                                             qos=1)
         if "demo lights" not in gnames:
-            log.debug("group is not present")
+            log.warning("group is not present")
             if "demo" in offlineDevices:
                 pass
             else:
-                log.debug("publish the group is not commisioned");
+                log.warning("publish the group is not commisioned");
                 offlineDevices.append("demo")
                 # data={"lightgroup":"Group for light is not commisioned"}
                 # mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode('utf-8'), qos=1)
@@ -242,12 +243,12 @@ def group():
                         "message": {"status":"Group for light is not commisioned"}}
                 mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
         else:
-            log.debug("group is present ")
+            # log.debug("group is present ")
             if "demo" in offlineDevices:
                 offlineDevices.remove("demo")
 
     except Exception as e:
-        log.debug("Exception raises in set_state_color {}".format(e))
+        log.error("Exception raises in set_state_color {}".format(e))
 
 
 #Rule engine.Based on podState and state table provided by zenspace,it will change the state of sensors
@@ -256,7 +257,7 @@ def group_light_change(colorcode):
    if podState == "Reservation In Use" or podState == "Admin In Use":
        intrusionDetection =0
 
-   log.debug("on group light change ")
+   # log.debug("on group light change ")
    try:
         dat = {"on": "true", "color": colorcode,"level":LIGHTLEV}
         data = json.dumps(dat).encode('utf-8')
@@ -267,11 +268,11 @@ def group_light_change(colorcode):
                                      method="PUT")
         resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
    except Exception as e:
-       log.debug("Exception changing Group color {}".format(e))
+       log.error("Exception changing Group color {}".format(e))
 
 def trigger_group_light_change(colorcode):
    global group_id,podState,intrusionDetection
-   log.debug("on trigger group light change ")
+   # log.debug("on trigger group light change ")
    if podState == "Reservation In Use" or podState == "Admin In Use":
        intrusionDetection = 0
 
@@ -279,14 +280,14 @@ def trigger_group_light_change(colorcode):
         tdat = {"on": "true", "color": colorcode}
 
         tdata = json.dumps(tdat).encode('utf-8')
-        # log.debug("Group color data is {} -- id - {}".format(tdata,group_id))
+        log.debug("Trigger Group color data is {} -- id - {}".format(tdata,group_id))
 
         req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                      headers=headers, data=tdata,
                                      method="PUT")
         resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
    except Exception as e:
-       log.debug("Exception changing Group color on trigger {}".format(e))
+       log.error("Exception changing Group color on trigger {}".format(e))
 
 
 def group_blink(blinkcount):
@@ -314,13 +315,13 @@ def group_blink(blinkcount):
 
 
    except Exception as e:
-       log.debug("Exception blinking Group color {}".format(e))
+       log.error("Exception blinking Group color {}".format(e))
 
 
 def redblink():
    global grpmembers,intrusionDetection
    try:
-       log.debug(" Inside red blink -{}".format(grpmembers))
+
        if len(grpmembers) == 0:
            res = urllib.request.urlopen(url + iot_ip + '/groups/id/' + str(group_id), timeout=URL_TIMEOUT)
            group = json.loads(res.read())
@@ -341,7 +342,7 @@ def redblink():
              sleep(8)
 
    except Exception as e:
-       log.debug("Exception red blinking Group color {}".format(e))
+       log.error("Exception red blinking Group color {}".format(e))
 
 
 
@@ -355,10 +356,10 @@ def identify_blink():
                 try:
                     req = urllib.request.Request(url + iot_ip + '/devices/' + i,headers=headers, data=body, method="PUT")
                     resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
-                    log.debug( " Response is -{}".format(resp))
+
 
                 except Exception as e:
-                    log.debug("Exception in identify blink -{}".format(e))
+                    log.error("Exception in identify blink -{}".format(e))
 
 
 
@@ -389,7 +390,7 @@ def update_pod_state():
                                                  method="PUT")
                     resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
         except Exception as e:
-               log.debug("Exception raises in updatepodstate - {}".format(e))
+               log.error("Exception raises in updatepodstate - {}".format(e))
     elif podState == "Reserved":
         group_light_change(RESERVECOLOR)
         try:
@@ -406,7 +407,7 @@ def update_pod_state():
                                                      method="PUT")
                         resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
         except Exception as e:
-            log.debug("Exception raises in updatepodstate - {}".format(e))
+            log.error("Exception raises in updatepodstate - {}".format(e))
     elif podState == "Admin In Use":
         group_light_change(ADMININUSECOLOR)
         try:
@@ -424,7 +425,7 @@ def update_pod_state():
                                                      method="PUT")
                         resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
         except Exception as e:
-                 log.debug("Exception raises in updatepodstate - {}".format(e))
+                 log.error("Exception raises in updatepodstate - {}".format(e))
     elif podState == "Reservation In Use":
         group_light_change(RESERVEINUSECOLOR)
         try:
@@ -439,7 +440,7 @@ def update_pod_state():
                                                  method="PUT")
                     resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
         except Exception as e:
-            log.debug("Exception raises in update pod state-{}".format(e))
+            log.error("Exception raises in update pod state-{}".format(e))
     elif podState == "TimeOut":
         group_light_change(TIMEOUTCOLOR)
         try:
@@ -454,7 +455,7 @@ def update_pod_state():
                                                  method="PUT")
                     resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
         except Exception as e:
-            log.debug("Exception raises in update pod state - {}".format(e))
+            log.error("Exception raises in update pod state - {}".format(e))
     elif podState == "Available in Next 10 min":
         if AVAILINBLINK == 0:
             group_light_change("white")
@@ -471,7 +472,7 @@ def update_pod_state():
                                                  method="PUT")
                     resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
         except Exception as e:
-            log.debug("Exception raises in update pod state - {}".format(e))
+            log.error("Exception raises in update pod state - {}".format(e))
     elif podState == "Unknown":
         group_light_change("white")
         try:
@@ -487,7 +488,7 @@ def update_pod_state():
                                                  method="PUT")
                     resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
         except Exception as e:
-            log.debug("Exception raises in update pod state - {}".format(e))
+            log.error("Exception raises in update pod state - {}".format(e))
     elif podState == "Reserved in Next 10 min":
         if RESERVEINBLINK == 0:
             group_light_change("white")
@@ -504,7 +505,7 @@ def update_pod_state():
                                                  method="PUT")
                     resp = urllib.request.urlopen(req)
         except Exception as e:
-            log.debug("Exception raises in update pod state - {}".format(e))
+            log.error("Exception raises in update pod state - {}".format(e))
     sensor_status_publish()
 
 #Update pod state to salesforce
@@ -521,7 +522,7 @@ def inform_pod_state():
 
 
     except Exception as e:
-        log.debug("Exception raised in inform_pod_state-- {}".format(e))
+        log.error("Exception raised in inform_pod_state-- {}".format(e))
 
         mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                             "{\"pod_state\":\"" + podState + "\"}",
@@ -570,7 +571,7 @@ def change_prev_pod_state():
             # sensor_status(0)
             sensor_status_publish()
     except Exception as e:
-        log.debug("Exception raises in change prevposState - {}".format(e))
+        log.error("Exception raises in change prevposState - {}".format(e))
 
 
 #To change pod state,update pod state to cloud and sales force
@@ -591,7 +592,7 @@ def change_pod_state(state):
             sensor_status_publish()
             inform_pod_state()
     except Exception as e:
-        log.debug("Exception raises in change pod state - {}".format(e))
+        log.error("Exception raises in change pod state - {}".format(e))
 
 def apply_logical_ssid(logicalName):
     log.debug("apply logical ssid")
@@ -656,7 +657,7 @@ def apply_logical_ssid(logicalName):
 
             i = i + 1;
     except Exception as e:
-        log.debug("Exception raised in apply logical ssid -- {}".format(e))
+        log.error("Exception raised in apply logical ssid -- {}".format(e))
 def sync_logical_ssid():
     global pod_id,logicUrl
 
@@ -674,7 +675,7 @@ def sync_logical_ssid():
         else:
             print("Logical pod name is not defined")
     except Exception as e:
-        log.debug("Exception raised in sync logical ssid {}".format(e))
+        log.error("Exception raised in sync logical ssid {}".format(e))
 
 def on_log(client,userdata,level,buf):
      # log.debug("mqtt connection - {}".format(buf))
@@ -745,7 +746,7 @@ def on_message(client, userdata, msg):
     global podState,lightState,LOCK_TIMER,prePodState
     global DESIRED_TIMER,DEVICE_TIMER,GATEWAY_TIMER,POD_TIMER,SENSOR_TIMER,CONN_TIMER
 
-    log.debug('Device received topic: {}, msg: {}'.format(msg.topic, str(msg.payload.decode("utf-8"))))
+    log.info('Device received topic: {}, msg: {}'.format(msg.topic, str(msg.payload.decode("utf-8"))))
     topic=msg.topic;
 
     req_body={};
@@ -814,7 +815,7 @@ def on_message(client, userdata, msg):
                     intruderState=desired.get("intruder_state")
                     if intruderState == "disabled":
                         intrusionDetection =0
-                        log.debug(" Intruder state in desired properties")
+
                         change_to_state_color(0)
                     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                         "{\"intruder_state\":\"" + intruderState + "\"}",
@@ -825,7 +826,7 @@ def on_message(client, userdata, msg):
                                         "{\"fan_state\":\"" + fanState + "\"}",
                                         qos=1)
                 if "timers" in desired.keys():
-                    log.debug("timers change")
+
                     timers = desired.get("timers")
                     if "lock_timer" in timers.keys():
                         LOCK_TIMER = timers.get("lock_timer");
@@ -862,12 +863,12 @@ def on_message(client, userdata, msg):
                             else:
                                 log.debug("media not exists - on message")
                         except Exception as e:
-                            log.debug("Unable to write into flash {}".format(e))
+                            log.error("Unable to write into flash {}".format(e))
 
                         # s=cs.CSClient().post('zenspace/auth',au)
 
                     except Exception as e:
-                        log.debug("exception in saving the pin {}".format(e))
+                        log.error("exception in saving the pin {}".format(e))
                 if "admin_auth" in desired.keys():
                     re = cs.CSClient().delete('zenspace/admin_auth')
 
@@ -900,15 +901,15 @@ def on_message(client, userdata, msg):
                             else:
                                 log.debug("media not exists - on message")
                         except Exception as e:
-                            log.debug("Unable to write into flash {}".format(e))
+                            log.error("Unable to write into flash {}".format(e))
 
                         # s=cs.CSClient().post('zenspace/auth',au)
 
                     except Exception as e:
-                        log.debug("exception in saving the pin {}".format(e))
+                        log.error("exception in saving the pin {}".format(e))
 
         except Exception as e:
-            log.debug("Exception raises in processing read desired properties -{}".format(e))
+            log.error("Exception raises in processing read desired properties -{}".format(e))
 
     if "/properties/desired" in topic:
      try:
@@ -945,12 +946,12 @@ def on_message(client, userdata, msg):
                         else:
                             log.debug("media not exists - on message")
                     except Exception as e:
-                        log.debug("Unable to write into flash {}".format(e))
+                        log.error("Unable to write into flash {}".format(e))
 
                     # s=cs.CSClient().post('zenspace/auth',au)
 
                 except Exception as e:
-                    log.debug("exception in saving the pin {}".format(e))
+                    log.error("exception in saving the pin {}".format(e))
             elif x == "admin_auth":
                 re = cs.CSClient().delete('zenspace/admin_auth')
 
@@ -982,12 +983,12 @@ def on_message(client, userdata, msg):
                         else:
                             log.debug("media not exists - on message")
                     except Exception as e:
-                        log.debug("Unable to write into flash {}".format(e))
+                        log.error("Unable to write into flash {}".format(e))
 
                     # s=cs.CSClient().post('zenspace/auth',au)
 
                 except Exception as e:
-                    log.debug("exception in saving the pin {}".format(e))
+                    log.error("exception in saving the pin {}".format(e))
             elif x == "pod_state":
                 prePodState = podState
                 beforePodState=podState
@@ -1036,7 +1037,7 @@ def on_message(client, userdata, msg):
                     try:
                         health_monitoring()
                     except Exception as e:
-                        log.debug("Exception raised in processing health monitoring {}".format(e))
+                        log.error("Exception raised in processing health monitoring {}".format(e))
             elif x == "fan_state":
 
                 fanState = y
@@ -1083,7 +1084,7 @@ def on_message(client, userdata, msg):
 
                     req=urllib.request.Request(url+iot_ip+'/devices/'+id,headers=headers,data=data,method="PUT")
                     resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
-                    log.debug("response from gateway -- {}".format(resp))
+
 
 
                     # single_sensor_status(id)
@@ -1100,7 +1101,7 @@ def on_message(client, userdata, msg):
                     sensor_status_publish()
 
                 except Exception as e:
-                    log.debug("Exception - processing sensor configuration -- {}".format(e))
+                    log.error("Exception - processing sensor configuration -- {}".format(e))
             else:
                 log.debug("no such device - {}".format(x))
 
@@ -1122,7 +1123,7 @@ def gateway_status():
         status=gateway_response.get("gateway").get("info").get("state")
 
     except Exception as ex:
-        log.debug('gateway not reachable-{}'.format(ex))
+        log.error('gateway not reachable-{}'.format(ex))
         status="Not connected"
 
     try:
@@ -1134,7 +1135,7 @@ def gateway_status():
                             qos=1)
         # log.info('Gateway status published')
     except Exception as e:
-        log.debug('Gateway status not publidhed - {}'.format(e))
+        log.error('Gateway status not publidhed - {}'.format(e))
 
 
 
@@ -1156,7 +1157,7 @@ def pod_status():
 
         offline_online_check()
     except Exception as e:
-        log.info('pod status not published {}'.format(e))
+        log.error('pod status not published {}'.format(e))
 
 
 #Getting single sensor status
@@ -1221,7 +1222,7 @@ def single_sensor_status(sensor_id):
                     mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(rep_prop), qos=1)
 
     except Exception as e:
-        log.debug("Exception in single sensor status - {}".format(e))
+        log.error("Exception in single sensor status - {}".format(e))
 
 
 
@@ -1234,7 +1235,7 @@ def change_to_state_color(startIndex):
             # log.debug("change to state color ends")
             return 1
         srid = '4'
-        log.debug("change to state color fucntion begins")
+        # log.debug("change to state color fucntion begins")
         #log.debug(" Start Index -{}  Total devices -{}".format(startIndex, total_devices))
         response = urllib.request.urlopen(url + iot_ip + '/devices/status?startIndex=' + str(startIndex),
                                           timeout=URL_TIMEOUT)
@@ -1284,7 +1285,7 @@ def change_to_state_color(startIndex):
                         log.debug("intrusion detected,don't trigger color change")
                         pass
                 else:
-                    log.debug("color change")
+
                     if podState == "Available" and color != AVAILCOLOR and rxtime !=0:
                         log.debug("trigger color change-available")
                         trigger_group_light_change(AVAILCOLOR)
@@ -1306,7 +1307,7 @@ def change_to_state_color(startIndex):
         # log.info('change to state color  ends')
         return change_to_state_color(startIndex + count)
     except Exception as e:
-        log.debug("Processing sensor status fails {}".format(e))
+        log.error("Processing sensor status fails {}".format(e))
         return 1
 
 
@@ -1402,7 +1403,7 @@ def sensor_status_check_only(startIndex):
                                    log.debug('sensor came back to online {}'.format(name))
                                    sensorOffline.remove(name)
                        except Exception as e:
-                           log.debug("Exception raised in sensor offline publishing state {}".format(e))
+                           log.error("Exception raised in sensor offline publishing state {}".format(e))
 
 
 
@@ -1442,7 +1443,7 @@ def sensor_status_check_only(startIndex):
        # log.info('sensor status  ends')
        return sensor_status_check_only(startIndex+count)
    except Exception as e:
-        log.debug("Processing sensor status fails {}".format(e))
+        log.error("Processing sensor status fails {}".format(e))
         return 1
 
 
@@ -1575,7 +1576,7 @@ def sensor_status(startIndex):
                                    log.debug('sensor came back to online {}'.format(name))
                                    sensorOffline.remove(name)
                        except Exception as e:
-                           log.debug("Exception raised in sensor offline publishing state {}".format(e))
+                           log.error("Exception raised in sensor offline publishing state {}".format(e))
 
 
 
@@ -1655,7 +1656,7 @@ def sensor_status_publish():
 
                 if "motion" in j.keys() and "motion" in l.keys():
                     try:
-                        log.debug("motion sensor..")
+
                         jtemp = j.get("temperature")
                         ltemp=l.get("temperature")
                         jwithoutTemp=j.copy()
@@ -1671,35 +1672,36 @@ def sensor_status_publish():
                             lwithoutBat.pop("batteryLevel")
                             log.debug("j ::: {} ".format(jwithoutBat))
                             log.debug("l ::: {} ".format(lwithoutBat))
-                            if int(jbat) > int(lbat):
-                                diffbat=int(jbat)-int(lbat)
-                            else:
-                                diffbat=int(lbat)-int(jbat)
-                            # log.debug("jbat {} ,lbat {} ,diffbat {}".format(jbat,lbat,diffbat))
-                            if diffbat > 5:
-                                log.debug("battery level differnece grater than 5")
+                            if jbat != "" and jbat !=None:
+                                if int(jbat) > int(lbat):
+                                    diffbat=int(jbat)-int(lbat)
+                                else:
+                                    diffbat=int(lbat)-int(jbat)
+                                # log.debug("jbat {} ,lbat {} ,diffbat {}".format(jbat,lbat,diffbat))
+                                if diffbat > 5:
 
+
+                                    mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
+                        if jtemp != "" and ltemp !="" and jtemp != None and ltemp !=None and jtemp != " " and ltemp != " ":
+                            if int(jtemp.split('.')[0]) > int(ltemp.split('.')[0]):
+                                difftemp=int(jtemp.split('.')[0]) - int(ltemp.split('.')[0])
+                            else:
+                                difftemp = int(ltemp.split('.')[0]) - int(jtemp.split('.')[0])
+
+                            if difftemp <= 1:
+                                pass
+                            else:
                                 mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
 
-                        if int(jtemp.split('.')[0]) > int(ltemp.split('.')[0]):
-                            difftemp=int(jtemp.split('.')[0]) - int(ltemp.split('.')[0])
-                        else:
-                            difftemp = int(ltemp.split('.')[0]) - int(jtemp.split('.')[0])
-
-                        if difftemp <= 1:
-                            pass
-                        else:
-                            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
-
-                        if jwithoutBat == lwithoutBat:
-                            log.debug("rest also same")
-                        else:
-                            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
+                            if jwithoutBat == lwithoutBat:
+                                pass
+                            else:
+                                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
                     except Exception as e:
-                        log.debug("Exception raised in sensor_status_publish motion sensor - {}".format(e))
+                        log.error("Exception raised in sensor_status_publish motion sensor - {}".format(e))
 
                 else:
-                    log.debug("different state")
+
                     print("i is {} , j is {}".format(i,j))
                     log.debug("i is {} , j is {}".format(i,j))
                     log.debug("k is {} ,l is {}".format(k,l))
@@ -1714,9 +1716,9 @@ def sensor_status_publish():
 
         #log.debug("after a is {} ,\n\t b is {}".format(devicestatustemp, devicestatuswithoutrx))
     except Exception as e:
-        log.debug("Exception - sensor status publish -{}".format(e))
+        log.error("Exception - sensor status publish -{}".format(e))
 
-    log.debug("sensor status publish ends")
+    # log.debug("sensor status publish ends")
 
 #Number of bytes transfered and received through the cradle point's lan and wan network is send to cloud as telementery data
 
@@ -1742,7 +1744,7 @@ def network_stats():
                                 json.dumps(data),
                                 qos=0)
     except Exception as e:
-        log.debug("Exception - network stats {}".format(e))
+        log.error("Exception - network stats {}".format(e))
 
 #Total devices connected to IOT gateway
 def get_number_of_devices():
@@ -1781,7 +1783,7 @@ def get_number_of_devices():
         return total_devices;
     except Exception as e:
 
-        log.debug("retreiving number of devices fails {}".format(e))
+        log.error("retreiving number of devices fails {}".format(e))
         return 0
 
 
@@ -1791,7 +1793,7 @@ def device_list(startIndex):
     try:
         total_devices = get_number_of_devices()
     except Exception as e:
-        log.debug("Exception raises in total_devices {}".format(e))
+        log.error("Exception raises in total_devices {}".format(e))
         total_devices=0
 
 
@@ -1822,7 +1824,7 @@ def device_list(startIndex):
             return device_list(startIndex+count)
 
     except Exception as e:
-            log.debug("Retrieving device list fails -{}".format(e))
+            log.error("Retrieving device list fails -{}".format(e))
             return 1
 
 def devices_list_update():
@@ -1833,7 +1835,7 @@ def devices_list_update():
         log.debug("deviceList -- {}".format(deviceslistbyid.keys()))
         device_list(0)
     except Exception as e:
-        log.debug("Excception in devices list update - {}".format(e));
+        log.error("Excception in devices list update - {}".format(e));
 
 def mqtt_connect():
     global mqtt_flag
@@ -1870,7 +1872,7 @@ def device_list_manage():
         old_devicelistbyid.update(deviceslistbyid.copy())
 
     except Exception as e:
-        log.debug("Exception - device list manage - {}".format(e))
+        log.error("Exception - device list manage - {}".format(e))
     group()
 def offline_online_check():
     global offline
@@ -1885,97 +1887,9 @@ def offline_online_check():
             log.debug("device is offline")
             offline = 1
     except Exception as e:
-        log.debug("Exception - offline online check {} ".format(e))
+        log.error("Exception - offline online check {} ".format(e))
 
 
-# def health_monitoring():
-#     global unreachable_host,healthFlag
-#     if healthFlag == 1:
-#         pass
-#     else:
-#         healthFlag = 1
-#         iotHost=internalHost=unlockHost="0.0.0.0"
-#         log.debug("unreachable hosts = {}".format(unreachable_host))
-#         try:
-#             mac_list = cs.CSClient().get('/config/dhcpd/reserve').get('data')
-#
-#             if (mac_list != None):
-#                 if (len(mac_list) > 0):
-#                     if "all" in unreachable_host:
-#                         unreachable_host.remove("all")
-#                     for item in mac_list:
-#                         host = item["ip_address"]
-#                         hostname=item["hostname"]
-#                         if hostname.upper().__contains__("UNLOCK"):
-#                             unlockHost = host
-#                         if hostname.upper().__contains__("GATEWAY"):
-#                             iotHost = host
-#                         if hostname.upper().__contains__("WIN"):
-#                             internalHost=host
-#                         cstore = cs.CSClient()
-#                         cstore.put('control/ping/start/host', host)
-#                         cstore.put('control/ping/start/size', 64)
-#
-#                         print('ping host: %s', host)
-#                         result = {}
-#                         try_count = 0;
-#
-#                         while try_count < 3:
-#                             result = cstore.get('control/ping')
-#                             if result.get('data') and result.get('data').get('status') in ["error", "done"]:
-#                                 break
-#                             time.sleep(5)
-#                             try_count += 1
-#
-#                         error_str = ""
-#                         if try_count == 3 or not result.get('data') or result.get('data').get('status') != "done":
-#                             error_str = "An error occurred"
-#                             if host in unreachable_host:
-#                               pass
-#                             else:
-#                                 unreachable_host.append(host)
-#                                 if hostname.__contains__("GATEWAY"):
-#                                     data = {"type": "WARNING", "deviceType": "IOTgateway", "name": hostname,
-#                                         "message": {"status":"Ping request failed ","host":host,"reason":result['data']['result']}}
-#                                 else:
-#                                     data = {"type": "WARNING", "deviceType": "Zenspace devices", "name": hostname,
-#                                             "message": {"status":"Ping request failed" ,"host":host,"reason":result['data']['result']}
-#                                             }
-#
-#
-#                                 # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-#                                 #                     "{\"health_monitor\": \""+host + " - "+ hostname+" ping request failed \" }",
-#                                 #                     qos=1)
-#                                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-#                                                     json.dumps(data),
-#                                                     qos=1)
-#                         if result.get('data').get('status') == "done":
-#                             if host in unreachable_host:
-#                                 unreachable_host.remove(host)
-#
-#                         log.debug("ping result:  FOR host %s  %s\n%s", host, error_str, result['data']['result'])
-#             else:
-#                 if "all" in unreachable_host:
-#                     pass
-#                 else:
-#                     unreachable_host.append("all")
-#                     data = {"type": "CRITICAL", "deviceType": "Zenspace devices", "name":"All devices" ,
-#                             "message": {"status":"No device found"}
-#                             }
-#                     # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-#                     #                     "{\"health_monitor\": \"MAC address is not found\" }",
-#                     #                     qos=1)
-#                     mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-#                                         json.dumps(data),
-#                                         qos=1)
-#
-#                 # log.info("ping result: %s\n%s", error_str)
-#             app_healthcheck(iotHost,unlockHost,internalHost)
-#             log.debug(" UnReachable host - {}".format(unreachable_host))
-#             healthFlag=0
-#         except Exception as e:
-#             log.debug("Exception raised in health monitoring = {}".format(e))
-#             healthFlag=0
 
 
 def health_monitoring():
@@ -2013,7 +1927,7 @@ def health_monitoring():
 
                         while try_count < 3:
                             r=cstore.put('control/ping/start/host', host)
-                            print("response is {}".format(r))
+
                             time.sleep(5)
                             result = cstore.get('control/ping')
                             print("result is {}".format(result.get('data').get('status')))
@@ -2070,22 +1984,23 @@ def health_monitoring():
 
 
             app_healthcheck(iotHost, unlockHost, internalHost)
-            print(" UnReachable host - {}".format(unreachable_host))
+            log.debug(" UnReachable host - {}".format(unreachable_host))
             healthFlag=0
         except Exception as e:
             print("Exception raised in health monitoring = {}".format(e))
+            log.error("Exception raised in health monitoring = {}".format(e))
             healthFlag=0
 
 
 
 def app_healthcheck(iotHost,unlockHost,internalHost):
     global unlockKeepAlive,unlockKeepAliveTimer,unreachable_host,podState,zenspaceKeepAlive,zenspaceKeepAliveTimer,cameraKeepAlive,cameraKeepAliveTimer
-    global zenspaceState,teamViewerState,airServerState
+    global teamViewerState,airServerState
     conn_type=""
     try:
         conn_type = cs.CSClient().get("/status/wan/primary_device").get("data")
     except Exception as e:
-        log.debug("Exception raised in conn_type {}".format(e))
+        log.error("Exception raised in conn_type {}".format(e))
     sensorList=[]
 
 
@@ -2158,7 +2073,7 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
 
         if internalHost == "0.0.0.0":
             internalState = "NOT RESERVED"
-        elif zenspaceState.lower() == "false":
+        elif zenspaceState.lower() == "false" or zenspaceState.lower() == "unknown":
             if internalHost in unreachable_host:
                 if camstate == "yes":
                     internalState = "PINGCAMZENUN"
@@ -2214,7 +2129,7 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
                 else:
                     iotserver = "notok"
             except Exception as e:
-                log.debug(e)
+                log.error("Gateway online check = {}".format(e))
                 iotserver = "notok"
 
             if iotHost in unreachable_host:
@@ -2231,20 +2146,24 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
 
         if teamViewerState.lower() == "true":
             tstate="INSTALLED"
+        elif teamViewerState.lower() == "unknown":
+            tstate = "UNKNOWN"
         else:
             tstate = "NOT INSTALLED"
 
         if airServerState.lower() == "true":
             astate = "INSTALLED"
+        elif airServerState.lower() == "unknown":
+            astate = "UNKNOWN"
         else:
             astate = "NOT INSTALLED"
 
         sensor=sensor_check()
 
-        data={"type":"INFO","deviceType":"MONITOR","name":"monitor","message":{"podstate": podState,"connType":conn_type,"iotGateway":iotGatewayState,"external":externalState,"internal":internalState,"teamviewer":tstate,"airserver":astate,"sensors":sensor}}
+        data={"type":"INFO","deviceType":"MONITOR","name":"monitor","message":{"connType":conn_type,"iotGateway":iotGatewayState,"external":externalState,"internal":internalState,"teamviewer":tstate,"airserver":astate,"sensors":sensor}}
         mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(data),qos=1)
     except Exception as e:
-        log.debug("Exception raises in app_helathcheck - {}".format(e))
+        log.error("Exception raises in app_helathcheck - {}".format(e))
 
 def sensor_check():
     global sensorOffline
@@ -2292,13 +2211,13 @@ def sensor_check():
                                     if int(diff.seconds) > SENSOR_OFFLINE_TIMER:
                                         off = off + 1
                     except Exception as e:
-                        log.debug("Exception raised in light state check = {}".format(e))
+                        log.error("Exception raised in light state check = {}".format(e))
         # print("offline count = {} , total - {}".format(off, total))
         onLight=total-off
         lightSensor={"name":"lights","available": onLight , "total": total}
         sensors.append(lightSensor)
     except Exception as e:
-        log.debug("Exeption raised in light helath check - {}".format(e))
+        log.error("Exeption raised in light helath check - {}".format(e))
     return sensors
 
 
@@ -2339,7 +2258,7 @@ def lock_door():
                 if (diffsec < SENSOR_OFFLINE_TIMER):
                   pass
                 else:
-                    log.debug("door lock is unreachable")
+                    log.warning("door lock is unreachable")
                     if "door_lock" in sensorOffline:
                         pass
                     else:
@@ -2355,7 +2274,7 @@ def lock_door():
                                             qos=1)
 
         else:
-            log.debug("door lock id is missing")
+            log.warning("door lock id is missing")
             if "door_lock" in sensorOffline:
                 pass
             else:
@@ -2372,7 +2291,7 @@ def lock_door():
             #                     "{\"door_lock_alert\": \"sensor missing \" }",
             #                     qos=1)
     except Exception as e:
-        log.debug("Exception - locking the door -- {}".format(e))
+        log.error("Exception - locking the door -- {}".format(e))
 
 def unlock_door():
     try:
@@ -2411,7 +2330,7 @@ def unlock_door():
                 if (diffsec < SENSOR_OFFLINE_TIMER):
                   pass
                 else:
-                    log.debug("door lock is unreachable")
+                    log.warning("door lock is unreachable")
                     if "door_lock" in sensorOffline:
                         pass
                     else:
@@ -2427,7 +2346,7 @@ def unlock_door():
                                             qos=1)
 
         else:
-            log.debug("door lock id is missing")
+            log.warning("door lock id is missing")
             if "door_lock" in sensorOffline:
                 pass
             else:
@@ -2444,7 +2363,7 @@ def unlock_door():
             #                     "{\"door_lock_alert\": \"sensor missing \" }",
             #                     qos=1)
     except Exception as e:
-        log.debug("Exception - locking the door -- {}".format(e))
+        log.error("Exception - locking the door -- {}".format(e))
 
 
 #IPadServer
@@ -2464,7 +2383,7 @@ def start_server():
 
     except Exception as e:
         print('Stopping Server, Key Board interrupt')
-        log.debug("Exception in startig server 9001 {}".format(e))
+        log.error("Exception in startig server 9001 {}".format(e))
         data = {"type": "CRITICAL", "deviceType": "cradlepoint", "name": "9001 server",
                 "message": {"status": "Server is not running {}".format(e)}
                 }
@@ -2493,7 +2412,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
                 self.wfile.write(s)
             except Exception as e:
-                log.debug("Exception occurs in get /sensor/info --{}".format(e))
+                log.error("Exception occurs in get /sensor/info --{}".format(e))
                 self.send_response(503)
                 self.end_headers()
         elif None != re.search('/pod/id',self.path):
@@ -2527,7 +2446,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b'Success')
             except Exception as e:
-                log.debug("Exception occurs in get /keepalive --{}".format(e))
+                log.error("Exception occurs in get /keepalive --{}".format(e))
                 self.send_response(503)
                 self.end_headers()
 
@@ -2565,7 +2484,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                   ldStateData = json.dumps(ldState).encode('utf-8')
                   self.wfile.write(ldStateData)
               except Exception as e:
-                  log.debug("Exception - pod/LightDoorstate - {}".format(e))
+                  log.error("Exception - pod/LightDoorstate - {}".format(e))
                   self.send_response(200)
                   self.send_header('Content-Type', 'application/json')
                   self.end_headers()
@@ -2584,7 +2503,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 podstateData = json.dumps(podstate).encode('utf-8')
                 self.wfile.write(podstateData)
             except Exception as e:
-                log.debug("Exception - /pod/Lightstate -- {}".format(e))
+                log.error("Exception - /pod/Lightstate -- {}".format(e))
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
@@ -2618,7 +2537,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.wfile.write(b'Success')
                     except Exception as e:
                         res = "412,bad request-{}".format(e)
-                        log.debug("Exception raised in /eventhub post request {}".format(e))
+                        log.error("Exception raised in /eventhub post request {}".format(e))
                         self.send_response(412)
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
@@ -2660,7 +2579,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.wfile.write(b'Success')
                     except Exception as e:
                         res = "412,bad request-{}".format(e)
-                        log.debug("Exception raised in /eventhub post request {}".format(e))
+                        log.error("Exception raised in /eventhub post request {}".format(e))
                         self.send_response(412)
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
@@ -2732,7 +2651,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                        self.send_response(200)
                                        self.end_headers()
                                        self.wfile.write(b'Door Opened')
-                                       log.debug("response code is {} - response text is {}".format("200","Door Opened"))
+
 
                                        if reservePodState == "Reservation In Use":
                                            log.debug("Reservation user loging in when state is {}".format(podState))
@@ -2795,7 +2714,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                             #     self.wfile.write(b'Service Unavailable')
                         except Exception as e:
                             res="412,bad request-{}".format(e)
-                            log.debug("Exception raised in /doorLock post request {}".format(e))
+                            log.error("Exception raised in /doorLock post request {}".format(e))
                             self.send_response(412)
                             self.end_headers()
                             self.wfile.write(b'BAD Request')
@@ -2866,7 +2785,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     self.send_response(412)
                     self.end_headers()
                     self.wfile.write(b'BAD Request')
-                    log.debug(" 412 bad request {}".format(e))
+                    log.error(" 412 bad request {}".format(e))
             else:
                 self.send_response(415)
                 self.end_headers()
@@ -2930,7 +2849,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     self.send_response(412)
                     self.end_headers()
                     self.wfile.write(b'BAD Request')
-                    log.debug(" 412 bad request {}".format(e))
+                    log.error(" 412 bad request {}".format(e))
             else:
                 self.send_response(415)
                 self.end_headers()
@@ -3138,7 +3057,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     data = json.dumps(dat).encode("utf-8")
                     self.wfile.write(data)
             except Exception as e:
-                log.debug("Exception /pod/state - {}".format(e))
+                log.error("Exception /pod/state - {}".format(e))
                 self.send_response(415)
                 self.end_headers()
                 dat = {"status": "BAD request"}
@@ -3256,7 +3175,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         except Exception as e:
                             intrusionDetection=0
 
-                            log.debug("exception raised in /pod/intrusion request {}".format(e))
+                            log.error("exception raised in /pod/intrusion request {}".format(e))
                             self.send_response(412)
                             self.end_headers()
                             self.wfile.write(b'BAD Request')
@@ -3298,12 +3217,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
                         except Exception as e:
-                            log.debug("Exception occurs in PUT /sensor/ --{}".format(e))
+                            log.error("Exception occurs in PUT /sensor/ --{}".format(e))
                             self.send_response(500);
                             self.end_headers()
                             self.wfile.write(b'Fail to reach gateway')
                     except Exception as e:
-                        log.debug("exception raised in /sensor request {}".format(e))
+                        log.error("exception raised in /sensor request {}".format(e))
                         self.send_response(412)
                         self.end_headers()
                         self.wfile.write(b'BAD Request'+e)
@@ -3317,7 +3236,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(b'BAD Request')
         elif None != re.search('/sensor/*', self.path):
             sensorName=self.path.split('/')[-1]
-            log.debug("headers for /sensor rrequest {}".format(self.headers))
+            log.debug("headers for /sensor request {}".format(self.headers))
             log.debug("sensor name is {}".format(sensorName))
             type = self.headers['Content-Type']
             if 'Content-Type' in self.headers:
@@ -3362,12 +3281,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                 self.end_headers()
                                 self.wfile.write(b'Invalid sensor')
                         except Exception as e:
-                            log.debug("Exception occurs in PUT /sensor/ --{}".format(e))
+                            log.error("Exception occurs in PUT /sensor/ --{}".format(e))
                             self.send_response(500);
                             self.end_headers()
                             self.wfile.write(b'Fail to reach gateway')
                     except Exception as e:
-                        log.debug("exception raised in /sensor request {}".format(e))
+                        log.error("exception raised in /sensor request {}".format(e))
                         self.send_response(412)
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
@@ -3387,7 +3306,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     try:
                         content_length = int(self.headers['Content-Length'])
 
-                        log.debug("content length is {}".format(content_length))
+
                         body = self.rfile.read(content_length)
                         log.debug("request body - {}".format(body))
 
@@ -3434,7 +3353,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.send_response(412)
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
-                        log.debug(" 412 bad request {}".format(e))
+                        log.error(" 412 bad request {}".format(e))
                 else:
                     self.send_response(415)
                     self.end_headers()
@@ -3483,12 +3402,15 @@ def verifyAuth(pin):
             if pin in avpins:
                 validverify = ''
 
+                log.debug("k is {}".format(pinlist))
                 for k in pinlist:
+                    log.debug(k[0])
                     if pin in k[0]:
                         timeIn = datetime.datetime.strptime(k[1], "%Y-%m-%d%H:%M:%S")
                         timeOut = datetime.datetime.strptime(k[2], "%Y-%m-%d%H:%M:%S")
                         curtime = datetime.datetime.utcnow()
                         log.debug(" Current time is {}".format(curtime))
+                        log.debug("time in = {} ,timeout = {}".format(timeIn,timeOut))
 
 
                         if (timeIn <= curtime and curtime <= timeOut):
@@ -3593,7 +3515,7 @@ def verifyAuth(pin):
                                # log.debug("gaeway response {}".format(resp))
                             else:
 
-                                log.debug("door lock device id missing")
+                                log.warning("door lock device id missing")
                                 if "door_lock" in sensorOffline:
                                     pass
                                 else:
@@ -3609,10 +3531,10 @@ def verifyAuth(pin):
                                 # return 20
                                 return 0
                         else:
-                              log.debug("valid verify invalid")
+                              log.warning("valid verify invalid")
                               validverify = "invalid"
 
-
+                print("valid verify is {}".format(validverify))
                 if validverify == "invalid":
                     if admin_auth_list != None:
                         availableadminPins = {};
@@ -3645,7 +3567,7 @@ def verifyAuth(pin):
                                     if (diffsec < SENSOR_OFFLINE_TIMER):
                                         pass
                                     else:
-                                        log.debug("door lock sensor is unreachable")
+                                        log.warning("door lock sensor is unreachable")
                                         data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
                                                 "message": {"status":"sensor unreachable","Current_UTC": str(currenttime),"Sensor_UTC":str(lctime)}
                                                 }
@@ -3657,7 +3579,7 @@ def verifyAuth(pin):
                                                             qos=1)
 
                             else:
-                                log.debug("door lock id is missing")
+                                log.warning("door lock id is missing")
                                 if "door_lock" in sensorOffline:
                                     pass
                                 else:
@@ -3815,7 +3737,7 @@ def verifyAuth(pin):
                 else:
                      return getAuthentications(pin, totalpincount)
     except Exception as e:
-        log.debug("Exception - verifyAuth -{}".format(e))
+        log.error("Exception - verifyAuth -{}".format(e))
         doorLockException=e
         return 500
 
@@ -3879,7 +3801,7 @@ def getAuthentications(pin,count):
 
             return 1
     except Exception as e:
-        log.debug("exception raised in getAuth()---{}".format(e))
+        log.error("exception raised in getAuth()---{}".format(e))
         return 1
 def get_iot_ip():
 
@@ -3917,7 +3839,7 @@ def get_iot_ip():
             else:
                 print("iot ip is present")
         except Exception as e:
-            log.debug("Exception - get iot ip - {}".format(e))
+            log.error("Exception - get iot ip - {}".format(e))
 
 
 #Timer functions
@@ -3970,7 +3892,7 @@ def get_desired():
         desid = "101"
         mqtt_client.publish('$iothub/twin/GET/?$rid=' + desid, qos=1)
     except Exception as e:
-        log.debug("Exception  - get desired {}".format(e))
+        log.error("Exception  - get desired {}".format(e))
 
 
 mqtt_client = mqtt.Client(client_id=pod_id, protocol=mqtt.MQTTv311)
@@ -4037,7 +3959,7 @@ try:
            print("not exists")
            log.debug("media not exists")
    except Exception as e:
-       log.debug("Unable to read from flash {}".format(e))
+       log.error("Unable to read from flash {}".format(e))
 
    if iot_hub_name !=None and pod_key !=None and pod_id !=None:
     try:
@@ -4051,7 +3973,7 @@ try:
         log.debug("Connecting to hub")
         mqtt_client.connect(iot_hub_name + '.azure-devices.net', port=8883,keepalive=90)
     except Exception as e:
-        log.debug("Exception in connecting to hub {}".format(e))
+        log.error("Exception in connecting to hub {}".format(e))
 
     # _thread.start_new_thread(mqtt_connect,())
     log.debug("hub connected")
@@ -4108,7 +4030,7 @@ try:
     try:
         total_devices=get_number_of_devices()
     except Exception as e:
-        log.debug("IOT gateway not reachable {}".format(e))
+        log.error("IOT gateway not reachable {}".format(e))
         total_devices=0
     try:
         # health_monitoring()
@@ -4120,7 +4042,7 @@ try:
         # device_list(start)
         devices_list_update()
     except Exception as e:
-        log.debug("Exception - main status calls - {}".format(e))
+        log.error("Exception - main status calls - {}".format(e))
     if len(deviceslistbyid) == 0:
         pass
     else:
@@ -4133,7 +4055,7 @@ try:
         # sensor_status_publish()
         pod_status()
     except Exception as e:
-        log.debug("Exception - main status publish - {}".format(e))
+        log.error("Exception - main status publish - {}".format(e))
     # setInterval(DEVICE_TIMER, device_list,start)
     setInterval(DEVICE_TIMER, devices_list_update)
     setInterval(POD_TIMER, pod_status)
