@@ -152,7 +152,9 @@ def verifyAuth(pin,client_ip):
                         log.debug("resp code- {}".format(resp.read()))
                     except Exception as e:
                         log.debug("Exception raises on calling /reservationHotspotLogin = {}".format(e))
-                return 0
+                    return 0
+                else:
+                    return 2
 
 
             else:
@@ -365,7 +367,7 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                              'Content-Type, X-Requested-with')
 
                             self.end_headers()
-                            self.wfile.write(bytes(json.dumps({"success": "timeout"}), 'utf-8'))
+                            self.wfile.write(bytes(json.dumps({"success": "exceed"}), 'utf-8'))
 
                         else:
                             self.send_response(500)

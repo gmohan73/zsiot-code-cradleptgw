@@ -37,7 +37,7 @@ URL_TIMEOUT=40
 CHANGE_TO_STATE_COLOR_TIMER=30
 SENSOR_OFFLINE_TIMER=900
 INTURSION_CHECK_TIMER=900
-cameraKeepAliveTimer=30
+cameraKeepAliveTimer=3600
 unlockKeepAliveTimer=3600
 zenspaceKeepAliveTimer=30
 #Global variable
@@ -100,9 +100,9 @@ conn_type=""
 cpOnlineTime=datetime.datetime.utcnow().replace(microsecond=0)
 ppOnlineTime=datetime.datetime.utcnow().replace(microsecond=0)
 intrusionDetectionTime=datetime.datetime.utcnow().replace(microsecond=0)
-unlockKeepAlive= datetime.datetime.utcnow().replace(microsecond=0)
-zenspaceKeepAlive=datetime.datetime.utcnow().replace(microsecond=0)
-cameraKeepAlive=datetime.datetime.utcnow().replace(microsecond=0)
+unlockKeepAlive= datetime.datetime.utcnow().replace(microsecond=0)-datetime.timedelta(hours=2)
+zenspaceKeepAlive=datetime.datetime.utcnow().replace(microsecond=0)-datetime.timedelta(hours=2)
+cameraKeepAlive=datetime.datetime.utcnow().replace(microsecond=0)-datetime.timedelta(hours=2)
 #set light state as enabled intitally
 
 ports=settings.PORTS
@@ -1029,6 +1029,9 @@ def on_message(client, userdata, msg):
             elif x == "lock_state":
 
                 lockstate = y
+
+                if lockstate == "disabled":
+                    unlock_door()
                 mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                     "{\"lock_state\":\"" + lockstate + "\"}",
                                     qos=1)
@@ -1093,7 +1096,9 @@ def on_message(client, userdata, msg):
 
                     sensor_status_publish()
                     log.debug("x is  {}  and y is {}".format(x,y))
-                    if x == "door_lock" and "on" in y.keys():
+                    if  x == "door_lock" and lockstate == "disabled":
+                        unlock_door()
+                    elif x == "door_lock" and "on" in y.keys():
 
                         val=y.get("on")
                         if lockstate == "enabled" and val.lower() == "false":
@@ -1944,7 +1949,7 @@ def health_monitoring():
                             try_count += 1
 
                         error_str = ""
-                        if try_count == 3 and result.get('data').get('status') == "error":
+                        if try_count == 3 and result.get('data').get('status') != "done":
                             error_str = "An error occurred"
                             if host in unreachable_host:
                               pass
