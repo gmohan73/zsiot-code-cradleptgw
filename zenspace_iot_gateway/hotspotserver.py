@@ -7,6 +7,7 @@ import sys
 # from http.server import HTTPServer, SimpleHTTPRequestHandler
 from server import HTTPServer, SimpleHTTPRequestHandler
 from threading import Thread
+from threading import Timer
 from time import sleep
 import cs
 from app_logging import AppLogger
@@ -25,9 +26,11 @@ aheaders= {"Content-Type":"application/x-www-form-urlencoded"}
 activeClients=0
 TIMER = 10
 URL_TIMEOUT = 40
+REVOKE_UNAUTH_TIMER=60
 totalClients=settings.HOTSPOT_CLIENTS
 hotspot_url=settings.HOTSPOT_URL
 hotspot_method=settings.HOTSPOT_METHOD
+#windows_firewallstate=settings.WINDOWS_FIREWALL
 
 podId__j=cs.CSClient().get('/config/system/system_id')
 if podId__j != None:
@@ -59,6 +62,121 @@ def start_server():
 
     return 0
 
+def code_verify():
+    try:
+        dat = {"type": "INFO", "deviceType": "cradlepoint", "name": "Hotspot",
+               "message": {"status": "Hotspot integrated code installed"}}
+        data = json.dumps(dat).encode("utf-8")
+        req = urllib.request.Request(url + "/eventhub", headers=headers, data=data, method="PUT")
+        resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+    except Exception as e:
+        log.debug("Exception raised in code_verify {}".format(e))
+def inform_windows_add(client_ip):
+    global windows_firewallstate
+    log.debug("in inform windows add")
+    print("inform windows add")
+    internalHost="0.0.0.0"
+    try:
+        mac_list = cs.CSClient().get('/config/dhcpd/reserve').get('data')
+        log.debug("mac list is {}".format(mac_list))
+        if (mac_list != None):
+            if (len(mac_list) > 0):
+
+                for item in mac_list:
+                    host = item["ip_address"]
+                    hostname = item["hostname"]
+                    if hostname.upper().__contains__("WIN"):
+                        internalHost = host
+                        log.debug("host name found")
+
+        try:
+            req = urllib.request.Request("http://" +internalHost+ ":9004/firewallrule/"+client_ip, headers=headers, method="PUT")
+
+            resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+            log.debug("resp code- {}".format(resp.read()))
+        except Exception as e:
+            print("Exception {}".format(e))
+            #log.debug("Exception raises on calling windows server = {} , client ip is {}".format(e,client_ip))
+            try:
+
+                    dat = {"type": "WARNING", "deviceType": "Windows", "name": "Windows server", "message": {"status":"Inform to windows about the ip = {} fails.Error is  {} ".format(client_ip,e)}}
+                    log.debug(dat)
+                    data=json.dumps(dat).encode("utf-8")
+                    req = urllib.request.Request(url+"/eventhub", headers=headers, data = data,method="PUT")
+                    resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+                    log.debug("response is {}".format(resp))
+            except Exception as e:
+                log.error("Exception raises on raising ticket about informing windows to add rule {} , client ip is".format(e,client_ip))
+
+
+    except Exception as e:
+        print("Exception {}".format(e))
+        #log.error("Exception raised while informing windows to add rule {} , client ip = ".format(e,client_ip))
+        try:
+
+                dat = {"type": "WARNING", "deviceType": "Windows", "name": "Windows server",
+                       "message": {"status": "Inform to windows about the ip = {} fails.Error is  {} ".format(client_ip, e)}}
+                log.debug(dat)
+                data = json.dumps(dat).encode("utf-8")
+                req = urllib.request.Request(url + "/eventhub", headers=headers, data=data, method="PUT")
+                resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+        except Exception as e:
+            log.error("Exception raises on raising ticket about informing windows {} , client ip is {}".format(e,client_ip))
+
+def inform_windows_delete(client_ip):
+    global windows_firewallstate
+    internalHost="0.0.0.0"
+    try:
+        mac_list = cs.CSClient().get('/config/dhcpd/reserve').get('data')
+        if (mac_list != None):
+            if (len(mac_list) > 0):
+
+                for item in mac_list:
+                    host = item["ip_address"]
+                    hostname = item["hostname"]
+                    if hostname.upper().__contains__("WIN"):
+                        internalHost = host
+        try:
+            req = urllib.request.Request("http://" +internalHost+ ":9004/delfirewall/"+client_ip, headers=headers, method="PUT")
+            resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+            log.debug("resp code- {}".format(resp.read()))
+        except Exception as e:
+            #log.debug("Exception raises on calling windows server = {},client ip is {}".format(e,client_ip))
+            try:
+                dat = {"type": "WARNING", "deviceType": "Windows", "name": "Windows server", "message": {"status":"Inform to windows about the ip = {} fails.Error is  {} ".format(client_ip,e)}}
+                log.debug(dat)
+                data=json.dumps(dat).encode("utf-8")
+                req = urllib.request.Request(url+"/eventhub", headers=headers, data = data,method="PUT")
+                resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+            except Exception as e:
+                log.error("Exception raises on raising ticket about informing windows to delete rule of {} -- {}".format(client_ip,e))
+
+
+    except Exception as e:
+        #log.error("Exception raised while informing windows to delete rule {},client ip = {}".format(e,client_ip))
+        try:
+            dat = {"type": "WARNING", "deviceType": "Windows", "name": "Windows server",
+                   "message": {"status": "Inform to windows about the ip = {} fails.Error is  {} ".format(client_ip, e)}}
+            log.debug(dat)
+            data = json.dumps(dat).encode("utf-8")
+            req = urllib.request.Request(url + "/eventhub", headers=headers, data=data, method="PUT")
+            resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+        except Exception as e:
+            log.error("Exception raises on raising ticket about informing windows to delete rule , client ip is {} , exception is {}".format(client_ip,e))
+
+#
+# def windows_firewall():
+#     global windows_firewallstate
+#     try:
+#
+#         firewall_state=cs.CSClient().get("/zenspace/windows_firewall").get("data")
+#         print(firewall_state)
+#         if firewall_state != None:
+#             windows_firewallstate=firewall_state
+#
+#
+#     except Exception as e:
+#         log.debug("Exception raised in windows_firewall = {}".format(e))
 
 def active_hotspot_clients():
     global activeClients
@@ -92,7 +210,7 @@ def hotspot_authentication_method():
         log.debug("Exception raised in hotspot method {}".format(e))
 
 def verifyAuth(pin,client_ip):
-    global iot_ip,totalClients,activeClients,hotspot_method,admin_pin,aheaders
+    global iot_ip,totalClients,activeClients,hotspot_method,admin_pin,aheaders,windows_firewallstate
     print("hotspot method {}".format(hotspot_method))
     log.debug("hotspot method is {}".format(hotspot_method))
     hotspot_authentication_method()
@@ -143,6 +261,11 @@ def verifyAuth(pin,client_ip):
                 active_hotspot_clients()
                 log.debug("total clients - {} , active clients - {}".format(totalClients,activeClients))
                 if activeClients < totalClients:
+                    log.debug("calling windows add")
+                    # windows_firewall()
+                    # log.debug(" Firewall state is -{}".format(windows_firewallstate))
+                    # if windows_firewallstate == "enabled":
+                    #     setTimeout(0,inform_windows_add,client_ip)
                     record.update({client_ip: [start_time,max(end_time), pin]})
                     try:
                         dat={"timeOut":str(max(end_time))}
@@ -206,6 +329,10 @@ def verifyAuth(pin,client_ip):
                                     active_hotspot_clients()
                                     log.debug("total clients - {} , active clients - {}".format(totalClients,activeClients))
                                     if activeClients < totalClients:
+                                        # windows_firewall()
+                                        # log.debug(" Firewall state is -{}".format(windows_firewallstate))
+                                        # if windows_firewallstate == "enabled":
+                                        #     setTimeout(0, inform_windows_add, client_ip)
                                         record.update({client_ip: [timeIn,timeout , pin]})
                                         try:
                                             dat={"timeOut":str(timeout)}
@@ -288,7 +415,9 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
     global validverify
 
     def do_GET(self):
-
+        log.debug(" Inside Hotspot server get request")
+        path = self.path
+        log.debug(" PAth is -{}".format(path))
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-control-Allow-Origin', '*')
@@ -299,7 +428,9 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         global activeClients,totalClients
         log.debug("POST request")
-
+        log.debug(" Inside Hotspot server get request")
+        path = self.path
+        log.debug(" PAth is -{}".format(path))
 
         if None != re.search('/doorLock', self.path):
 
@@ -437,6 +568,7 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                 active_hotspot_clients()
                                 log.debug("Active clients were {} total clients is {}".format(activeClients,totalClients))
                                 if activeClients < totalClients:
+
                                     record.update({self.client_address[0]: [current_time, timeout, admin_pin]})
 
                                     self.send_response(200)
@@ -446,7 +578,13 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                     self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-with')
                                     self.end_headers()
                                     self.wfile.write(bytes(json.dumps({"success": "true"}), 'utf-8'))
+                                    # windows_firewall()
+                                    # log.debug(" Firewall state is -{}".format(windows_firewallstate))
+                                    # if windows_firewallstate == "enabled":
+                                    #     setTimeout(0, inform_windows_add, self.client_address[0])
                                     try:
+
+
                                                 dat = {"duration": duration}
                                                 log.debug("url {}".format(url))
                                                 data = json.dumps(dat).encode("utf-8")
@@ -509,6 +647,10 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                         self.end_headers()
                                         self.wfile.write(bytes(json.dumps({"success": "true"}), 'utf-8'))
                                         log.debug("calling 9001 port to change the state")
+                                        # windows_firewall()
+                                        # log.debug(" Firewall state is -{}".format(windows_firewallstate))
+                                        # if windows_firewallstate == "enabled":
+                                        #     setTimeout(0, inform_windows_add, self.client_address[0])
                                         try:
                                             dat = {"duration": duration}
                                             log.debug("url {}".format(url))
@@ -598,8 +740,12 @@ def call_at_interval(period, callback, args):
         callback(*args)
 def setInterval(period, callback, *args):
     Thread(target=call_at_interval, args=(period, callback, args)).start()
+def setTimeout(seconds,callback,*args):
+    t = Timer(seconds, callback,args=(args))
+    t.start()
 
 def checktime():
+    global windows_firewallstate
     print("record is {}".format(record))
     clients = cs.CSClient().get('/status/hotspot')
 
@@ -610,27 +756,31 @@ def checktime():
      for x, y in record.items():
         
         if (clients.get("data").__getitem__("clients").__contains__(x)):
-            log.debug("in clients")
+            # log.debug("in clients")
             
 
             curtime = datetime.datetime.utcnow().replace(microsecond=0)
             exp_time =y[1]
             print("current time" , curtime , "expired time" , exp_time)
-            log.debug("current time {} ,  expired time {}".format(curtime , exp_time))
+            # log.debug("current time {} ,  expired time {}".format(curtime , exp_time))
             diff=exp_time - curtime
-            log.debug("different of current time and previous time {}".format(diff))
+            # log.debug("different of current time and previous time {}".format(diff))
 
             
             if (curtime > exp_time):
                 print("time expired {}".format(x))
-                log.debug("time expired {}".format(x))
+                # log.debug("time expired {}".format(x))
 
                 cs.CSClient().put("/control/hotspot/revoke",x)
                 record.pop(x)
+                # windows_firewall()
+                # log.debug(" Firewall state is -{}".format(windows_firewallstate))
+                # if windows_firewallstate == "enabled":
+                #     setTimeout(0, inform_windows_delete,x)
             else:
                 print()
                 print("time available for {}".format(x))
-                log.debug("time available for {}".format(x))
+                # log.debug("time available for {}".format(x))
 
         else:
             print()
@@ -640,10 +790,35 @@ def checktime():
         log.debug("Error occured in checktime {}".format(e))
         print(sys.exc_info())
 
+def revoke_unauthorized_client():
+    global record
+    print("record is {}".format(record))
+    clients = cs.CSClient().get('/status/hotspot')
+
+    json_value = json.dumps(clients, ensure_ascii=True, indent=4)
+    json_lines = json_value.split(sep='\n')
+
+    clientList=clients.get("data").__getitem__("clients")
+    try:
+
+        if (clientList.__len__() != 0):
+            print("processing start")
+            for x, y in clientList.items():
+
+                if record.__contains__(x):
+                    log.debug("{} connected through verification".format(x))
+                else:
+                    log.debug(" {} hack".format(x))
+                    cs.CSClient().put("/control/hotspot/revoke", x)
+
+    except Exception as e:
+        print("error occured")
+        log.debug("Error occured in revoke unauthorized client {}".format(e))
+        print(sys.exc_info())
 
 
 setInterval(TIMER, checktime)
-
+setInterval(REVOKE_UNAUTH_TIMER,revoke_unauthorized_client)
 
 
 if __name__ == '__main__':
@@ -652,6 +827,8 @@ if __name__ == '__main__':
         try:
             cs.CSClient().put('zenspace/hotspot_clients',totalClients)
             cs.CSClient().put('zenspace/hotspot_method',hotspot_method)
+          #  cs.CSClient().put('zenspace/windows_firewall',windows_firewallstate)
+            setTimeout(60,code_verify)
         except Exception as e:
             log.debug("Exception raised while setting default totalclient and hostpot method - {}".format(e))
         start_server()

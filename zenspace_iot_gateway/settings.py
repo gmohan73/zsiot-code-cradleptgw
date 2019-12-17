@@ -12,3 +12,4 @@ HOTSPOT_URL='https://zenspace-production.herokuapp.com/api/iot/pod/accesspoint/a
 HOTSPOT_CLIENTS=15
 HOTSPOT_METHOD="local"
 PORTS=[9001,9002,9003]
+WINDOWS_FIREWALL="disabled"
