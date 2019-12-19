@@ -800,16 +800,16 @@ def revoke_unauthorized_client():
 
     clientList=clients.get("data").__getitem__("clients")
     try:
+        if(clientList.__len__() != record.__len__()):
+            if (clientList.__len__() != 0):
+                print("processing start")
+                for x, y in clientList.items():
 
-        if (clientList.__len__() != 0):
-            print("processing start")
-            for x, y in clientList.items():
-
-                if record.__contains__(x):
-                    log.debug("{} connected through verification".format(x))
-                else:
-                    log.debug(" {} hack".format(x))
-                    cs.CSClient().put("/control/hotspot/revoke", x)
+                    if record.__contains__(x):
+                        log.debug("{} connected through verification".format(x))
+                    else:
+                        log.debug(" {} hack".format(x))
+                        cs.CSClient().put("/control/hotspot/revoke", x)
 
     except Exception as e:
         print("error occured")

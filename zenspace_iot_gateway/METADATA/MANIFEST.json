@@ -1,0 +1,49 @@
+{
+    "app": {
+        "auto_start": true,
+        "date": "2019-12-18T11:45:02.447081",
+        "files": {
+            "README.md": "bff11bc7286cbb711efb659402425118f70bb6aba0834d2346e55a90301ab8dd",
+            "app_logging.py": "607016bfc1a678a95344879615740c7b67ecbbfc87d85da5881500b7739d4514",
+            "certs.cer": "9ad4432c01983afaa939a9cbddc8e7b913d9f317431c9d5ebbfe655b21c340dc",
+            "cs.py": "4b28536d145441ed265d0c7782ee880ecbd3d82dab74172885c8452b09e64640",
+            "dynui.txt": "1292904a530b7cc82b8f724e96ae239db806965bfd29faa29c3c91681a603526",
+            "hotspotserver.py": "0afc1e5262968aa899109fe8a628d7d0ad0f71a380f87218b08be1b97d3366c8",
+            "index.tpl.html": "7f5830f7866994b7b7c303a53d96b1eab1615c41d21df63535cbb922b6dd93fc",
+            "installer.py": "7881f1881efc5195b9abc10dfad2b1e342104c69e2d6e87249fd87dfc52574a8",
+            "package.ini": "6510ef1c97a072bab1fb06891f4e7033a252471ae23d9c2d5a4ec5cddb1f11d9",
+            "paho/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "paho/mqtt/__init__.py": "8a80b7eabd951aa2e5ce3c0e27d5c12fc74a5050e0f6b796bf0445aff58284d5",
+            "paho/mqtt/client.py": "d5730227110fb502c8cf1577a3bf68b5e48fe0fb9567a7374e2ce90bf29601fe",
+            "paho/mqtt/matcher.py": "fea9cce1a6b59739c2770716e5f1b7a6e0d5428eb2be130d64de5759b74f7029",
+            "paho/mqtt/publish.py": "35d97d31902dfed681f0a96a6dcabcdfe17e417817f5f75c580d7f68c8486112",
+            "paho/mqtt/subscribe.py": "f64891e62f20fa294f7423c123c143f2fc79bfa9e3e0774fed101ece0642b3b1",
+            "readme.txt": "7c9cec7672543b3ab7ca282a6e31044328758e99c1bdce893e5219bb7f46244b",
+            "resources/bootstrap.min.css": "dafe65e0c3fd34988c296b645f30142cf598704ea662ce9c81747ce03d90ce9f",
+            "resources/bootstrap.min.js": "53964478a7c634e8dad34ecc303dd8048d00dce4993906de1bacf67f663486ef",
+            "resources/generic.css": "7db69a9e489ef658bb5186169bf60fd96b132da11105f65ff7511a8fbbec4bd5",
+            "resources/jquery.min.js": "a28ccf8a7b50522bdeea0cd83cdeca221c18fc1f9df3ee6b3d3c48d599206855",
+            "resources/logo.png": "c04bdd8ff3a2b2a502a406528caf83d787144e7203672dc22164ea84f7c16132",
+            "resources/zenspace.jpg": "57d32966ecc7544914eb78d8b9fdb15206769aca065adc9c2016e074666bd509",
+            "server.pem": "0ccd77ca2fc33648233a135902da15bddea1391694b7efad285dab40fdc47290",
+            "server.py": "edab546aad0cf7b82df7da4d165a1e8408b3f7bd6777a99d654607a5e1826b08",
+            "settings.py": "4ec20e7859a2e87d98d2e6ca1527ef0b520ff04c8e698be887c4b9246a47a133",
+            "start.sh": "ddbf99fe4159380f96278a35ec487d93814aa3abf0bb5ee5e9d08ea772f3efbd",
+            "zenspace_iot_gateway.py": "b340ea1dd1aa0593bcd3c5d0a1d83009c3a35ff15dd328784ad951511ecb4d13"
+        },
+        "firmware_major": 6,
+        "firmware_minor": 5,
+        "name": "zenspace_iot_gateway",
+        "notes": "",
+        "reboot": true,
+        "restart": true,
+        "uuid": "06b3e3af-7b97-4df0-9f30-63b045306eda",
+        "vendor": "Cradlepoint",
+        "version_major": 5,
+        "version_minor": 246
+    },
+    "pmf": {
+        "version_major": 1,
+        "version_minor": 0
+    }
+}

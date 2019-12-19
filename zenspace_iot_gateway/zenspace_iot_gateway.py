@@ -992,8 +992,9 @@ def on_message(client, userdata, msg):
             #                         qos=1)
             elif x == "ping_reset":
                 data = y
-                if data.lower() == "yes":
-                    ping_reset()
+                if data != None :
+                    if data.lower() == "yes":
+                        ping_reset()
 
             elif x == "hotspot_clients":
                 re = cs.CSClient().delete('zenspace/hotspot_clients')
@@ -2105,6 +2106,7 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
     log.debug("unreachable host")
     try:
         conn_type = cs.CSClient().get("/status/wan/primary_device").get("data")
+
     except Exception as e:
         log.error("Exception raised in conn_type {}".format(e))
     sensorList=[]
