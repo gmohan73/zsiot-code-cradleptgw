@@ -143,6 +143,10 @@ class CSClient(object):
             return json.loads(response.text)
 
 
+
+
+
+
     def delete(self, base, query='', tree=0):
         """
         Constructs and sends a put request to update or add specified data to the device router tree.

@@ -62,15 +62,15 @@ def start_server():
 
     return 0
 
-def code_verify():
-    try:
-        dat = {"type": "INFO", "deviceType": "cradlepoint", "name": "Hotspot",
-               "message": {"status": "Hotspot integrated code installed"}}
-        data = json.dumps(dat).encode("utf-8")
-        req = urllib.request.Request(url + "/eventhub", headers=headers, data=data, method="PUT")
-        resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
-    except Exception as e:
-        log.debug("Exception raised in code_verify {}".format(e))
+# def code_verify():
+    # try:
+    #     dat = {"type": "INFO", "deviceType": "cradlepoint", "name": "Hotspot",
+    #            "message": {"status": "Hotspot integrated code installed"}}
+    #     data = json.dumps(dat).encode("utf-8")
+    #     req = urllib.request.Request(url + "/eventhub", headers=headers, data=data, method="PUT")
+    #     resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+    # except Exception as e:
+    #     log.debug("Exception raised in code_verify {}".format(e))
 def inform_windows_add(client_ip):
     global windows_firewallstate
     log.debug("in inform windows add")
@@ -828,7 +828,7 @@ if __name__ == '__main__':
             cs.CSClient().put('zenspace/hotspot_clients',totalClients)
             cs.CSClient().put('zenspace/hotspot_method',hotspot_method)
           #  cs.CSClient().put('zenspace/windows_firewall',windows_firewallstate)
-            setTimeout(60,code_verify)
+           # setTimeout(60,code_verify)
         except Exception as e:
             log.debug("Exception raised while setting default totalclient and hostpot method - {}".format(e))
         start_server()

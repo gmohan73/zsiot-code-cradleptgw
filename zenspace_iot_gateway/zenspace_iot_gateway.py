@@ -93,6 +93,7 @@ mqtt_flag=0
 tdflag=0
 tdevent=20
 sensorOffline=[]
+gatewayTicket=[]
 unreachable_host = []
 offlineDevices=[];
 intrusionDetection=0;
@@ -357,7 +358,7 @@ def redblink():
 
 def identify_blink():
             global grpmembers
-            log.debug("Inside identify blink -{}".format(grpmembers))
+            #log.debug("Inside identify blink -{}".format(grpmembers))
             dat = {"command": "identify", "duration": 5}
             body = json.dumps(dat).encode('utf-8')
             for i in grpmembers:
@@ -766,7 +767,15 @@ def on_message(client, userdata, msg):
                 desired = msgToJson.get("desired")
 
                 if "pod_state" in desired.keys():
-                    prePodState=podState
+                    if podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min":
+                        if desired.get("pod_state") == "Available in Next 10 min" or desired.get("pod_state") == "Reserved in Next 10 min":
+                            pass
+                        else:
+
+                            prePodState = podState
+                    else:
+                        prePodState = podState
+
                     beforePodState = podState
                     log.debug("pod state updated by {}".format(podState))
                     log.debug("on message first,cloud before pod state -- {} ,cloud state is -- {}".format(cloudbeforePodState,cloudPodState))
@@ -783,12 +792,14 @@ def on_message(client, userdata, msg):
                         pass
                     elif desired.get("pod_state") == "Reserved in Next 10 min" or desired.get("pod_state") == "Available in Next 10 min":
                         log.debug("pod state R10 or A10")
+                        podState = desired.get("pod_state")
                         if beforePodState == "Reservation In Use":
                             log.debug("prev pod state is RIU,updating state")
-
+                            update_pod_state()
                         else:
                             log.debug("pod state is R10 or A10 but pod not in use")
                             pass
+
                     else:
                         podState=desired.get("pod_state")
                         update_pod_state()
@@ -868,12 +879,13 @@ def on_message(client, userdata, msg):
                     try:
                         au = json.dumps(y)
                         count = 0
-                        for k, v in y.items():
-                            # data={k:{"TimeIn":v.get("TimeIn"),"TimeOut":v.get("TimeOut")}}
-                            data = {k: {"pin": v.get("pin"), "TimeOut": v.get("TimeOut")}}
-                            s = cs.CSClient().put('zenspace/pin_auth/' + str(count), data)
+                        if y != None:
+                            for k, v in y.items():
+                                # data={k:{"TimeIn":v.get("TimeIn"),"TimeOut":v.get("TimeOut")}}
+                                data = {k: {"pin": v.get("pin"), "TimeOut": v.get("TimeOut")}}
+                                s = cs.CSClient().put('zenspace/pin_auth/' + str(count), data)
 
-                            count = count + 1
+                                count = count + 1
                         data = cs.CSClient().get("zenspace/").get("data")
 
                         print(data)
@@ -905,13 +917,14 @@ def on_message(client, userdata, msg):
                         au = json.dumps(y)
                         # log.debug("admin _auth pin -{} = {} ".format(y))
                         count = 0
-                        for k, v in y.items():
-                            data = {k: v}
+                        if y!= None:
+                            for k, v in y.items():
+                                data = {k: v}
 
-                            # s = cs.CSClient().post('zenspace/admin_auth/', data)
-                            s = cs.CSClient().put('zenspace/admin_auth/' + str(count), data)
+                                # s = cs.CSClient().post('zenspace/admin_auth/', data)
+                                s = cs.CSClient().put('zenspace/admin_auth/' + str(count), data)
 
-                            count = count + 1
+                                count = count + 1
                         data = cs.CSClient().get("zenspace/").get("data")
 
                         print(data)
@@ -951,12 +964,13 @@ def on_message(client, userdata, msg):
                 try:
                     au=json.dumps(y)
                     count=0
-                    for k,v in y.items():
-                        # data={k:{"TimeIn":v.get("TimeIn"),"TimeOut":v.get("TimeOut")}}
-                        data = { k: {"pin":v.get("pin"), "TimeOut": v.get("TimeOut")}}
-                        s = cs.CSClient().put('zenspace/pin_auth/'+str(count),data)
+                    if y!= None:
+                        for k,v in y.items():
+                            # data={k:{"TimeIn":v.get("TimeIn"),"TimeOut":v.get("TimeOut")}}
+                            data = { k: {"pin":v.get("pin"), "TimeOut": v.get("TimeOut")}}
+                            s = cs.CSClient().put('zenspace/pin_auth/'+str(count),data)
 
-                        count=count+1
+                            count=count+1
                     data = cs.CSClient().get("zenspace/").get("data")
 
                     print(data)
@@ -1013,13 +1027,14 @@ def on_message(client, userdata, msg):
                     au = json.dumps(y)
                     log.debug("admin _auth pin -{} = {} ".format(x,y))
                     count=0
-                    for k, v in y.items():
-                        data = {k: v}
+                    if y!= None:
+                        for k, v in y.items():
+                            data = {k: v}
 
-                        # s = cs.CSClient().post('zenspace/admin_auth/', data)
-                        s = cs.CSClient().put('zenspace/admin_auth/'+str(count), data)
+                            # s = cs.CSClient().post('zenspace/admin_auth/', data)
+                            s = cs.CSClient().put('zenspace/admin_auth/'+str(count), data)
 
-                        count=count+1
+                            count=count+1
                     data = cs.CSClient().get("zenspace/").get("data")
 
                     print(data)
@@ -1044,7 +1059,15 @@ def on_message(client, userdata, msg):
                 except Exception as e:
                     log.error("exception in saving the pin {}".format(e))
             elif x == "pod_state":
-                prePodState = podState
+
+                # if podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min":
+                #     if y == "Available in Next 10 min" or y == "Reserved in Next 10 min":
+                #         pass
+                #     else:
+                #
+                #         prePodState = podState
+                # else:
+                #     prePodState = podState
                 beforePodState=podState
                 log.debug("pod state updated by {}".format(podState))
                 log.debug("on message first,cloud before pod state -- {} ,cloud state is -- {}".format(cloudbeforePodState,
@@ -1059,7 +1082,14 @@ def on_message(client, userdata, msg):
                     log.debug(" Admin In use,cloud pushed state is by passed")
                     pass
                 else:
-                    prePodState = podState
+                    if podState == "Available in Next 10 min" or podState == "Reserved in Next 10 min":
+                        if y == "Available in Next 10 min" or y == "Reserved in Next 10 min":
+                            pass
+                        else:
+
+                            prePodState = podState
+                    else:
+                        prePodState = podState
                     podState = y
                     if podState == "Reserved in Next 10 min" or podState == "Available in Next 10 min":
                         log.debug("pod state R10 or A10")
@@ -1696,6 +1726,11 @@ def sensor_status(startIndex):
        return sensor_status(startIndex+count)
    except Exception as e:
         log.debug("Processing sensor status fails {}".format(e))
+
+        if(str(e).__contains__("platform")):
+            log.debug("Platform exception raised")
+            setTimeout(2,ping_reset)
+            log.debug("Reset iot gateway")
         return 1
 
 def sensor_status_publish():
@@ -1803,9 +1838,9 @@ def sensor_status_publish():
 def network_stats():
     global conn_type
     try:
-        conn_type=cs.CSClient().get("/status/wan/primary_device").get("data")
-        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
-                            "{\"conn_type\":\"" + conn_type + "\"}", qos=0)
+       # conn_type=cs.CSClient().get("/status/wan/primary_device").get("data")
+       # mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+       #                      "{\"conn_type\":\"" + conn_type + "\"}", qos=0)
 
         wan_in=cs.CSClient().get("/status/stats/usage/wan_in").get("data");
         wan_out=cs.CSClient().get("/status/stats/usage/wan_out").get("data");
@@ -2097,6 +2132,28 @@ def health_monitoring():
             log.error("Exception raised in health monitoring = {}".format(e))
             healthFlag=0
 
+def check_timestamp(gatewayTime):
+    global gatewayTicket
+    try:
+        if "gateway" in gatewayTicket:
+            gatewayTicket.remove("gateway");
+
+        gateway_time = datetime.datetime.utcfromtimestamp(gatewayTime)
+        log.debug("gateway time is {}".format(gateway_time))
+        return 0
+    except Exception as e:
+        log.error("Exception raised in check timestamp {}".format(e))
+
+        if "gateway" in gatewayTicket:
+
+            pass
+        else:
+            gatewayTicket.append("gateway");
+            data = {"type": "CRITICAL", "deviceType": "IOT gateway", "name": "IOT gateway",
+                    "message": {"status": "{}".format(e)}
+                    }
+            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
+        return 1
 
 
 def app_healthcheck(iotHost,unlockHost,internalHost):
@@ -2106,6 +2163,9 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
     log.debug("unreachable host")
     try:
         conn_type = cs.CSClient().get("/status/wan/primary_device").get("data")
+
+        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                            "{\"conn_type\":\"" + conn_type + "\"}", qos=0)
 
     except Exception as e:
         log.error("Exception raised in conn_type {}".format(e))
@@ -2241,13 +2301,24 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
         else:
 
             try:
-                res = urllib.request.urlopen(url + iot_ip + '/gateway', timeout=URL_TIMEOUT)
+                gateway_time = ''
+                #res = urllib.request.urlopen(url + iot_ip + '/gateway', timeout=URL_TIMEOUT)
+                res = urllib.request.urlopen(url + iot_ip + '/time', timeout=URL_TIMEOUT)
+                respData = res.read();
+                resp = json.loads(respData)
+                gateway_time = resp.get("time").get("utcTimestamp")
+                timeStampState=check_timestamp(gateway_time)
+                log.debug(" Health Monitoring ........ Gateway time - {}".format(gateway_time))
                 if res.status == 200:
-                    iotserver="ok"
+                    if timeStampState == 0:
+                        iotserver="ok"
+                    elif timeStampState == 1:
+                        iotserver="notok"
                 else:
                     iotserver = "notok"
             except Exception as e:
                 log.error("Gateway online check = {}".format(e))
+                log.error (" Gateway time -{}".format(gateway_time))
                 iotserver = "notok"
 
             if iotHost in unreachable_host:
@@ -3131,6 +3202,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
                         log.debug(" 412 bad request {}".format(e))
+                        if (str(e).__contains__("platform") or str(e).__contains__("timeout")):
+                            log.debug("Platform exception raised")
+                            setTimeout(2, ping_reset)
+                            log.debug("Reset iot gateway")
                 else:
                     res="415,Bad request"
                     self.send_response(415)
@@ -3513,7 +3588,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
 def verifyAuth(pin):
-    global iot_ip,tmpState,doorLockException
+    global iot_ip,tmpState,doorLockException,prePodState
     try:
         auth = cs.CSClient().get("zenspace/pin_auth");
         admin_auth=cs.CSClient().get("zenspace/admin_auth")
@@ -3610,7 +3685,7 @@ def verifyAuth(pin):
                                         # lockTime = curtime.second + LOCK_TIMER
                                         #
                                         # setTimeout(lockTime, lock_door)
-                                        sensor_status_publish()
+                                        # sensor_status_publish()
 
                                     currenttime = datetime.datetime.utcnow().replace(microsecond=0)
                                     lctimestamp = l.get("rxTime")
@@ -3878,6 +3953,10 @@ def verifyAuth(pin):
                      return getAuthentications(pin, totalpincount)
     except Exception as e:
         log.error("Exception - verifyAuth -{}".format(e))
+        if (str(e).__contains__("platform") or str(e).__contains__("timeout")):
+            log.debug("Platform exception raised")
+            setTimeout(2, ping_reset)
+            log.debug("Reset iot gateway")
         doorLockException=e
         return 500
 
