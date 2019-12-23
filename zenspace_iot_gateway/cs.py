@@ -142,6 +142,49 @@ class CSClient(object):
 
             return json.loads(response.text)
 
+    def put_modified(self, base, value='', query='', tree=0):
+        """
+        Constructs and sends a put request to update or add specified data to the device router tree.
+
+        The behavior of this method is contextual:
+            - If the app is installed on(and executed from) a device, it directly updates or adds the specified data to
+              the router tree.
+            - If the app running remotely from a computer it calls the HTTP PUT method to update or add the specified
+              data.
+
+
+        Args:
+            base: String representing a path to a resource on a router tree,
+                  (i.e. '/config/system/logging/level').
+            value: Not required.
+            query: Not required.
+            tree: Not required.
+
+        Returns:
+            A dictionary containing the response (i.e. {"success": True, "data:": {}}
+        """
+        value = json.dumps(value)
+        if sys.platform == 'linux2':
+            cmd = "put\n{}\n{}\n{}\n{}\n".format(base, query, tree, value)
+            return self._dispatch(cmd)
+        else:
+            # Running in a computer so use http to send the put to the device.
+            import requests
+            device_ip, username, password = self._get_device_access_info()
+            device_api = 'http://{}/api/{}/{}'.format(device_ip, base, query)
+
+            try:
+                response = requests.put(device_api,
+                                        headers={"Content-Type": "application/x-www-form-urlencoded"},
+                                        auth=self._get_auth(device_ip, username, password),
+                                        data={"data": '{}'.format(value)})
+            except (requests.exceptions.Timeout,
+                    requests.exceptions.ConnectionError):
+                print("Timeout: device at {} did not respond.".format(device_ip))
+                return None
+
+            return json.loads(response.text)
+
 
 
 

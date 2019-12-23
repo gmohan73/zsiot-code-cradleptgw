@@ -648,7 +648,7 @@ def apply_logical_ssid(logicalName):
                                 if (bss_uid == uid):
                                     print(bs.__getitem__('uid'))
                                     print("radio =", j, "  bss= ", k)
-                                    cs.CSClient().put('/config/wlan/radio/' + str(j) + '/bss/' + str(k) + '/ssid',
+                                    cs.CSClient().put_modified('/config/wlan/radio/' + str(j) + '/bss/' + str(k) + '/ssid',
                                                       logicalName)
 
 
