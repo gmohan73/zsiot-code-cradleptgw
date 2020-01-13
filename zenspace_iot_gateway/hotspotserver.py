@@ -792,13 +792,17 @@ def checktime():
 
 def revoke_unauthorized_client():
     global record
-    print("record is {}".format(record))
+    #log.debug(" Inside check for unauthorised clients")
+    #log.debug("record is {}".format(record))
     clients = cs.CSClient().get('/status/hotspot')
 
     json_value = json.dumps(clients, ensure_ascii=True, indent=4)
     json_lines = json_value.split(sep='\n')
 
     clientList=clients.get("data").__getitem__("clients")
+    log.debug(" Client List -{}".format(clientList))
+
+
     try:
         if(clientList.__len__() != record.__len__()):
             if (clientList.__len__() != 0):

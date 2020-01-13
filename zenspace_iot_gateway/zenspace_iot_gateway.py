@@ -35,7 +35,8 @@ DESIRED_TIMER=10
 HEALTH_TIMER=1800
 POD_OFFLINE_TIMER=300
 LOCK_TIMER=1
-URL_TIMEOUT=40
+#URL_TIMEOUT=40
+URL_TIMEOUT=5
 CHANGE_TO_STATE_COLOR_TIMER=30
 SENSOR_OFFLINE_TIMER=900
 INTURSION_CHECK_TIMER=900
@@ -128,10 +129,12 @@ path_to_root_cert = os.path.join(os.getcwd(), 'certs.cer')
 hubName__j=cs.CSClient().get('/config/system/asset_id')
 podId__j=cs.CSClient().get('/config/system/system_id')
 podKey__j=cs.CSClient().get('/config/system/desc')
-
+'''
 cs.CSClient().put("/control/ping/start/host","")
 cs.CSClient().put("/control/ping/start/size",64)
 cs.CSClient().put("/control/ping/start/num",4)
+'''
+cs.CSClient().put("/control/ping/start", {"host": "", "size": 64, "num": 4, "timeout": 3})
 
 iot_hub_name="Unknown"
 pod_id="Unknown"
@@ -195,6 +198,7 @@ def set_state_color():
         AVAILINBLINK = 0
         RESERVEINBLINK = 0
     try:
+        time.sleep(1)
         res = urllib.request.urlopen(url + iot_ip + '/groups',timeout=URL_TIMEOUT)
         gres = res.read()
         group_response = json.loads(gres)
@@ -215,6 +219,7 @@ def group():
     global group_id,groupnames,gnflag,offlineDevices
     gnames=[]
     try:
+        time.sleep(1)
         res = urllib.request.urlopen(url + iot_ip + '/groups', timeout=URL_TIMEOUT)
         gres = res.read()
         group_response = json.loads(gres)
@@ -272,7 +277,7 @@ def group_light_change(colorcode):
         dat = {"on": "true", "color": colorcode,"level":LIGHTLEV}
         data = json.dumps(dat).encode('utf-8')
         log.debug("Group color data is {} -- id - {}".format(data,group_id))
-
+        time.sleep(1)
         req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                      headers=headers, data=data,
                                      method="PUT")
@@ -291,7 +296,7 @@ def trigger_group_light_change(colorcode):
 
         tdata = json.dumps(tdat).encode('utf-8')
         log.debug("Trigger Group color data is {} -- id - {}".format(tdata,group_id))
-
+        time.sleep(1)
         req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                      headers=headers, data=tdata,
                                      method="PUT")
@@ -308,11 +313,12 @@ def group_blink(blinkcount):
             dat = {"on": "false"}
             data = json.dumps(dat).encode('utf-8')
             log.debug("Group color data is {},group id -{}".format(data,group_id))
-
+            time.sleep(1)
             req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                          headers=headers, data=data,
                                          method="PUT")
             resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
+            time.sleep(1)
             dat = {"on": "true"}
             data = json.dumps(dat).encode('utf-8')
 
@@ -333,6 +339,7 @@ def redblink():
    try:
 
        if len(grpmembers) == 0:
+           time.sleep(1)
            res = urllib.request.urlopen(url + iot_ip + '/groups/id/' + str(group_id), timeout=URL_TIMEOUT)
            group = json.loads(res.read())
            print(group)
@@ -364,6 +371,7 @@ def identify_blink():
             for i in grpmembers:
                 print(i)
                 try:
+                    time.sleep(1)
                     req = urllib.request.Request(url + iot_ip + '/devices/' + i,headers=headers, data=body, method="PUT")
                     resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
 
@@ -1167,7 +1175,7 @@ def on_message(client, userdata, msg):
 
                     data = json.dumps(y).encode('utf-8')
                     log.debug("data is {}".format(data))
-
+                    time.sleep(1)
                     req=urllib.request.Request(url+iot_ip+'/devices/'+id,headers=headers,data=data,method="PUT")
                     resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
 
@@ -1207,6 +1215,7 @@ def gateway_status():
     global iot_ip
     res='';
     try:
+        time.sleep(1)
         res=urllib.request.urlopen(url+iot_ip+'/gateway',timeout=URL_TIMEOUT)
         gres=res.read()
         gateway_response= json.loads(gres)
@@ -1273,6 +1282,7 @@ def single_sensor_status(sensor_id):
     global iot_ip
     try:
         srid="2000"
+        time.sleep(1)
         response = urllib.request.urlopen(url+iot_ip + '/devices/status/'+sensor_id,timeout=URL_TIMEOUT)
         respData = response.read();
         res = json.loads(respData)
@@ -1345,6 +1355,7 @@ def change_to_state_color(startIndex):
         srid = '4'
         # log.debug("change to state color fucntion begins")
         #log.debug(" Start Index -{}  Total devices -{}".format(startIndex, total_devices))
+        time.sleep(1)
         response = urllib.request.urlopen(url + iot_ip + '/devices/status?startIndex=' + str(startIndex),
                                           timeout=URL_TIMEOUT)
         respData = response.read();
@@ -1428,7 +1439,7 @@ def sensor_status_check_only(startIndex):
            return 1
        srid='4'
 
-
+       time.sleep(1)
        response=urllib.request.urlopen(url+iot_ip + '/devices/status?startIndex='+str(startIndex),timeout=URL_TIMEOUT)
        respData=response.read();
        res=json.loads(respData)
@@ -1568,7 +1579,7 @@ def sensor_status(startIndex):
            return 1
        srid='4'
 
-
+       time.sleep(1)
        response=urllib.request.urlopen(url+iot_ip + '/devices/status?startIndex='+str(startIndex),timeout=URL_TIMEOUT)
        respData=response.read();
        res=json.loads(respData)
@@ -1864,7 +1875,7 @@ def get_number_of_devices():
     global total_devices,tdflag,tdevent,offlineDevices
     global iot_ip
     try:
-
+        time.sleep(1)
         res=urllib.request.urlopen(url+iot_ip + '/devices',timeout=URL_TIMEOUT)
         nres=res.read()
         number_of_devices= json.loads(nres)
@@ -1913,7 +1924,7 @@ def device_list(startIndex):
     try:
             if (startIndex >= total_devices):
                 return 1
-
+            time.sleep(1)
             response=urllib.request.urlopen(url+iot_ip + '/devices/info?startIndex='+str(startIndex),timeout=URL_TIMEOUT)
             dres=response.read()
             res=json.loads(dres);
@@ -2004,26 +2015,30 @@ def offline_online_check():
 
 
 def ping_reset():
+    '''
     cs.CSClient().put("/control/ping/start/host", "")
     cs.CSClient().put("/control/ping/start/size", 96)
     cs.CSClient().put("/control/ping/start/num", 8)
+'''
+    cs.CSClient().put("/control/ping/start", {"host": iot_ip, "size": 96, "num": 8, "timeout": 3})
+
+    #host = iot_ip
+    log.debug('Ping reset ping host: %s', iot_ip)
 
 
-    host = iot_ip
-    log.debug('Ping reset ping host: %s', host)
+   # time.sleep(9)
+    #r = cs.CSClient().put('control/ping/start/host', host)
 
-
-    time.sleep(9)
-    r = cs.CSClient().put('control/ping/start/host', host)
-
-    time.sleep(10)
+    #time.sleep(10)
     result = cs.CSClient().get('control/ping')
     log.debug("result is {}".format(result.get('data').get('status')))
-
+'''
     cs.CSClient().put("/control/ping/start/host","")
     cs.CSClient().put("/control/ping/start/size",64)
     cs.CSClient().put("/control/ping/start/num",4)
 
+'''
+cs.CSClient().put("/control/ping/start", {"host": "", "size": 64, "num": 4, "timeout": 3})
 
 
 def health_monitoring():
@@ -2158,7 +2173,7 @@ def check_timestamp(gatewayTime):
 
 def app_healthcheck(iotHost,unlockHost,internalHost):
     global unlockKeepAlive,unlockKeepAliveTimer,unreachable_host,podState,zenspaceKeepAlive,zenspaceKeepAliveTimer,cameraKeepAlive,cameraKeepAliveTimer
-    global teamViewerState,airServerState
+    global teamViewerState,airServerState, gatewayTicket
     conn_type=""
     log.debug("unreachable host")
     try:
@@ -2303,12 +2318,14 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
             try:
                 gateway_time = ''
                 #res = urllib.request.urlopen(url + iot_ip + '/gateway', timeout=URL_TIMEOUT)
+                time.sleep(1)
                 res = urllib.request.urlopen(url + iot_ip + '/time', timeout=URL_TIMEOUT)
                 respData = res.read();
                 resp = json.loads(respData)
                 gateway_time = resp.get("time").get("utcTimestamp")
                 timeStampState=check_timestamp(gateway_time)
                 log.debug(" Health Monitoring ........ Gateway time - {}".format(gateway_time))
+                iotserver=""
                 if res.status == 200:
                     if timeStampState == 0:
                         iotserver="ok"
@@ -2318,7 +2335,17 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
                     iotserver = "notok"
             except Exception as e:
                 log.error("Gateway online check = {}".format(e))
-                log.error (" Gateway time -{}".format(gateway_time))
+                #log.error (" Gateway time -{}".format(gateway_time))
+                if "gateway" in gatewayTicket:
+
+                    pass
+                else:
+
+                    gatewayTicket.append("gateway")
+                    data = {"type": "CRITICAL", "deviceType": "IOT gateway", "name": "IOT gateway",
+                    "message": {"status": "{}".format(e)}
+						}
+                    mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
                 iotserver = "notok"
 
             if iotHost in unreachable_host:
@@ -2373,22 +2400,24 @@ def sensor_check(iotGatewayState):
     sensors.append(doorSensor)
 
     print("\n\t {}".format(deviceslistbyid))
-    totalD = 0;
-    offD=0;
+    totalD = 0
+    offD=0
     if deviceslistbyid != None and len(deviceslistbyid) != 0:
         for x, y in deviceslistbyid.items():
             print(x, " :: ", y)
             if "light" in y[2]:
                 if x in sensorOffline:
-                    offD=offD+1;
-                totalD = totalD + 1;
+                    offD=offD+1
+                totalD = totalD + 1
         available=totalD-offD
         lightSensor.update({"available": available})
         lightSensor.update({"total": totalD})
     ##light##
     try:
+        time.sleep(1)
         res = urllib.request.urlopen(url + iot_ip + '/groups/id/' + str(group_id), timeout=URL_TIMEOUT)
         group = json.loads(res.read())
+        total = off = 0
         print(group)
         if "group" in group.keys():
             gr = group.get("group")
@@ -2400,6 +2429,7 @@ def sensor_check(iotGatewayState):
                 for i in members:
                     print(i)
                     try:
+                        time.sleep(1)
                         res = urllib.request.urlopen(url + iot_ip + '/devices/status/' + i, timeout=URL_TIMEOUT)
                         memstate = json.loads(res.read())
                         if "deviceStatus" in memstate:
@@ -2428,7 +2458,7 @@ def sensor_check(iotGatewayState):
     except Exception as e:
         log.error("Exeption raised in light helath check - {}".format(e))
     sensors.append(lightSensor)
-    print("\n\n\t sensors = {}".format(sensors));
+    print("\n\n\t sensors = {}".format(sensors))
     return sensors
 
 
@@ -2437,9 +2467,10 @@ def lock_door():
         log.debug("locking the door...")
         if devicelist.__contains__("door_lock"):
             id = devicelist.__getitem__("door_lock")[0]
+            time.sleep(1)
             response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
             dres = response.read()
-            res = json.loads(dres);
+            res = json.loads(dres)
             dstatus = res.get("deviceStatus")
 
             list = res.get("deviceStatus").get("list")
@@ -2448,6 +2479,7 @@ def lock_door():
                 dat = {"on": "true"}
                 # log.debug("data is {}".format(data))
                 data = json.dumps(dat).encode('utf-8')
+                time.sleep(1)
                 req = urllib.request.Request(url + iot_ip + '/devices/' + id, headers=headers,
                                              data=data,
                                              method="PUT")
@@ -2502,16 +2534,25 @@ def lock_door():
             #                     "{\"door_lock_alert\": \"sensor missing \" }",
             #                     qos=1)
     except Exception as e:
-        log.error("Exception - locking the door -- {}".format(e))
+        err = "Exception - locking the door -- {}".format(e)
+        log.debug(err)
+        data = {"type": "CRITICAL", "deviceType": "sensor", "name": "door_unlock",
+                "message": {"status": err}
+                }
+
+        mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                            json.dumps(data),
+                            qos=1)
 
 def unlock_door():
     try:
         log.debug("unlocking the door...")
         if devicelist.__contains__("door_lock"):
             id = devicelist.__getitem__("door_lock")[0]
+            time.sleep(1)
             response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
             dres = response.read()
-            res = json.loads(dres);
+            res = json.loads(dres)
             dstatus = res.get("deviceStatus")
 
             list = res.get("deviceStatus").get("list")
@@ -2520,6 +2561,7 @@ def unlock_door():
                 dat = {"on": "false"}
                 # log.debug("data is {}".format(data))
                 data = json.dumps(dat).encode('utf-8')
+                time.sleep(1)
                 req = urllib.request.Request(url + iot_ip + '/devices/' + id, headers=headers,
                                              data=data,
                                              method="PUT")
@@ -2574,7 +2616,15 @@ def unlock_door():
             #                     "{\"door_lock_alert\": \"sensor missing \" }",
             #                     qos=1)
     except Exception as e:
-        log.error("Exception - unlocking the door -- {}".format(e))
+        err = "Exception - unlocking the door -- {}".format(e)
+        log.debug(err)
+        data = {"type": "CRITICAL", "deviceType": "sensor", "name": "door_unlock",
+                "message": {"status": err}
+                }
+
+        mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                            json.dumps(data),
+                            qos=1)
 
 
 #IPadServer
@@ -2582,7 +2632,7 @@ def start_server():
     server_address = ('', 9001)
 
     print('Starting Server: {}'.format(server_address))
-    log.info('IPadServer started');
+    log.info('IPadServer started')
 
     # httpd.socket = ssl.wrap_socket(httpd.socket, certfile='./server.pem',server_side=True)
 
@@ -3112,6 +3162,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
                                             # log.debug("data is {}".format(data))
                                             data = json.dumps(dat).encode('utf-8')
+                                            time.sleep(1)
                                             req = urllib.request.Request(url+iot_ip + '/devices/' + id, headers=headers, data=data,
                                                                          method="PUT")
                                             resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
@@ -3202,7 +3253,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
                         log.debug(" 412 bad request {}".format(e))
-                        if (str(e).__contains__("platform") or str(e).__contains__("timeout")):
+                       # if (str(e).__contains__("platform") or str(e).__contains__("timeout")):
+                        if (str(e).__contains__("platform")):
                             log.debug("Platform exception raised")
                             setTimeout(2, ping_reset)
                             log.debug("Reset iot gateway")
@@ -3330,6 +3382,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                 intrusionDetectionTime=datetime.datetime.utcnow().replace(microsecond=0)
 
                                                 log.debug("request body is {}".format(data))
+                                                time.sleep(1)
                                                 req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                                                              headers=headers, data=json.dumps(data).encode('utf-8'),
                                                                              method="PUT")
@@ -3345,6 +3398,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                                     intrusionDetectionTime = datetime.datetime.utcnow().replace(
                                                         microsecond=0)
                                                     log.debug("request body is {}".format(data))
+                                                    time.sleep(1)
                                                     req = urllib.request.Request(
                                                         url + iot_ip + '/groups/id/' + str(group_id),
                                                         headers=headers, data=json.dumps(data).encode('utf-8'),
@@ -3416,7 +3470,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                             devices_list_update()
                             data = json.loads(body)
 
-
+                            time.sleep(1)
                             req = urllib.request.Request(url + iot_ip + '/groups/id/' + str(group_id),
                                                          headers=headers, data=json.dumps(data).encode('utf-8'),
                                                          method="PUT")
@@ -3465,7 +3519,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
                                 id = devicelist.__getitem__(sensorName)[0]
                                 data = json.loads(body)
-
+                                time.sleep(1)
                                 req = urllib.request.Request(url+iot_ip + '/devices/' + id, headers=headers, data=json.dumps(data).encode('utf-8'), method="PUT")
                                 resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
 
@@ -3633,7 +3687,7 @@ def verifyAuth(pin):
                             validverify = "valid"
                             if devicelist.__contains__("door_lock"):
                                 id = devicelist.__getitem__("door_lock")[0]
-
+                                time.sleep(1)
                                 # log.debug("door id is {}".format(d))
                                 response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
                                 dres = response.read()
@@ -3647,6 +3701,7 @@ def verifyAuth(pin):
                                     dat = {"on":"false"}
                                     # log.debug("data is {}".format(data))
                                     data = json.dumps(dat).encode('utf-8')
+                                    time.sleep(1)
                                     req = urllib.request.Request(url + iot_ip + '/devices/' + id, headers=headers,
                                                                  data=data,
                                                                  method="PUT")
@@ -3758,7 +3813,7 @@ def verifyAuth(pin):
                         if pin in availableadminPins.keys():
                             if devicelist.__contains__("door_lock"):
                                 id = devicelist.__getitem__("door_lock")[0]
-
+                                time.sleep(1)
                                 # log.debug("door id is {}".format(d))
                                 response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
                                 dres = response.read()
@@ -3828,7 +3883,7 @@ def verifyAuth(pin):
                         if pin in availableadminPins.keys():
                             if devicelist.__contains__("door_lock"):
                                 id = devicelist.__getitem__("door_lock")[0]
-
+                                time.sleep(1)
                                 # log.debug("door id is {}".format(d))
                                 response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
                                 dres = response.read()
@@ -3900,7 +3955,7 @@ def verifyAuth(pin):
                   if pin in availableadminPins.keys():
                       if devicelist.__contains__("door_lock"):
                           id = devicelist.__getitem__("door_lock")[0]
-
+                          time.sleep(1)
                           # log.debug("door id is {}".format(d))
                           response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
                           dres = response.read()
@@ -3953,7 +4008,8 @@ def verifyAuth(pin):
                      return getAuthentications(pin, totalpincount)
     except Exception as e:
         log.error("Exception - verifyAuth -{}".format(e))
-        if (str(e).__contains__("platform") or str(e).__contains__("timeout")):
+        #if (str(e).__contains__("platform") or str(e).__contains__("timeout")):
+        if (str(e).__contains__("platform")):
             log.debug("Platform exception raised")
             setTimeout(2, ping_reset)
             log.debug("Reset iot gateway")
@@ -4216,7 +4272,7 @@ try:
                             tls_version=ssl.PROTOCOL_TLSv1, ciphers=None)
 
         mqtt_client.tls_insecure_set(False)
-
+        log.debug(iot_hub_name)
         log.debug("Connecting to hub")
         mqtt_client.connect(iot_hub_name + '.azure-devices.net', port=8883,keepalive=90)
     except Exception as e:
