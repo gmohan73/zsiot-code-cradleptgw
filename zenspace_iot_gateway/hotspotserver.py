@@ -2,6 +2,7 @@ import cgi
 import json
 import time
 import urllib.request
+import urllib.parse
 import datetime
 import sys
 # from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -25,7 +26,7 @@ headers = {"Content-Type": "application/json"}
 aheaders= {"Content-Type":"application/x-www-form-urlencoded"}
 activeClients=0
 TIMER = 10
-URL_TIMEOUT = 40
+URL_TIMEOUT = 10
 REVOKE_UNAUTH_TIMER=60
 totalClients=settings.HOTSPOT_CLIENTS
 hotspot_url=settings.HOTSPOT_URL
@@ -46,7 +47,7 @@ def start_server():
     print('Starting Server: {}'.format(server_address))
     log.info('Starting Server: {}'.format(server_address))
 
-    log.info('Zenspace hotspot server started');
+    log.info('Zenspace hotspot server started')
 
 
 
@@ -55,10 +56,27 @@ def start_server():
         httpd = HTTPServer(server_address, WebServerRequestHandler)
         httpd.serve_forever()
 
-    except Exception as e:
+    except Exception as e1:
         print('Stopping Server, Key Board interrupt')
-        log.debug("Exception raised in 9002 server {}".format(e))
+        #log.debug("Exception raised in 9002 server {}".format(e))
+        errstr = format(e1)
+        log.debug(errstr)
+        try:
+            url = settings.ZEN_TICKET
+            dat = {"appName": "cradlepoint", "issueType": "general", "name": "Zenspace", "podid": pod_id,
+                   "issuedetail1": "unable to run 9002", "email": "", "phoneNumber": "", "issuedetail2": errstr,
+                   "preferredContact": " ", "devicetype": ""}
 
+            headers = aheaders
+            data = urllib.parse.urlencode(dat).encode('utf-8')
+
+            req = urllib.request.Request(url, headers=headers, data=data, method="POST")
+            resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+
+        except Exception as e:
+
+            log.debug(
+              "Exception while raising ticket for 9002 server -{}".format(e))
 
     return 0
 
@@ -71,6 +89,25 @@ def start_server():
     #     resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
     # except Exception as e:
     #     log.debug("Exception raised in code_verify {}".format(e))
+def raise_ticket(errstr):
+    try:
+        url = settings.ZEN_TICKET
+        dat = {"appName": "cradlepoint", "issueType": "general", "name": "Zenspace", "podid": pod_id,
+               "issuedetail1": errstr, "email": "", "phoneNumber": "", "issuedetail2": "",
+               "preferredContact": " ", "devicetype": ""}
+
+        headers = aheaders
+        data = urllib.parse.urlencode(dat).encode('utf-8')
+
+        req = urllib.request.Request(url, headers=headers, data=data, method="POST")
+        resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+
+    except Exception as e:
+
+        log.debug(
+            "Exception while raising ticket for 9002 server -{}".format(e))
+
+
 def inform_windows_add(client_ip):
     global windows_firewallstate
     log.debug("in inform windows add")
@@ -454,6 +491,17 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                     if x == "pin":
                         client_ip=self.client_address[0]
                         s = verifyAuth(y,client_ip)
+                        try:
+
+                            dat = {"type": "INFO", "deviceType": "Hotspot", "name": "Hotspot server", "message": {
+                                "status": "Response code from Hotspot pin {} authentication  {} ".format(y,s)}}
+                            log.debug(dat)
+                            data = json.dumps(dat).encode("utf-8")
+                            req = urllib.request.Request(url + "/eventhub", headers=headers, data=data, method="PUT")
+                            resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+
+                        except Exception as e:
+                            log.error("Exception raised on saving Hotspt logs{}".format(e))
 
                         if s == 0:
 
@@ -651,6 +699,7 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                         # log.debug(" Firewall state is -{}".format(windows_firewallstate))
                                         # if windows_firewallstate == "enabled":
                                         #     setTimeout(0, inform_windows_add, self.client_address[0])
+                                        errstr= "Succesful hotspot authentication - key -{} pin -{}".format(adminkey,adminPin)
                                         try:
                                             dat = {"duration": duration}
                                             log.debug("url {}".format(url))
@@ -663,6 +712,8 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                         except Exception as e:
                                             log.debug("Exception raises on calling /adminHotspotLogin = {}".format(e))
                                     else:
+                                        errstr = " Exceeded number of hotspot clients - key -{} pin -{}".format(adminkey,
+                                                                                                             adminPin)
                                         self.send_response(200)
                                         self.send_header('Content-type', 'application/json')
                                         self.send_header('Access-control-Allow-Origin', '*')
@@ -673,6 +724,7 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
 
 
                                 else:
+                                    errstr = "UnSuccesful hotspot authentication - key{}, pin -{}".format(adminkey,adminPin)
                                     self.send_response(401)
                                     self.send_header('Content-type', 'application/json')
                                     self.send_header('Access-control-Allow-Origin', '*')
@@ -681,6 +733,23 @@ class WebServerRequestHandler(SimpleHTTPRequestHandler):
                                                      'Content-Type, X-Requested-with')
                                     self.end_headers()
                                     self.wfile.write(bytes(json.dumps({"success": "false"}), 'utf-8'))
+
+                                try:
+
+                                    dat = {"type": "INFO", "deviceType": "Hotspot", "name": "Hotspot server",
+                                           "message": {
+                                               "status": " {} ".format(errstr)}}
+                                    log.debug(dat)
+                                    data = json.dumps(dat).encode("utf-8")
+                                    req = urllib.request.Request(url + "/eventhub", headers=headers, data=data,
+                                                                 method="PUT")
+                                    resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+
+                                except Exception as e:
+                                    log.error("Exception raised on saving Hotspt logs{}".format(e))
+
+
+
 
                             else:
                                 self.send_response(401)
@@ -753,7 +822,8 @@ def checktime():
     json_lines = json_value.split(sep='\n')
     
     try:
-     for x, y in record.items():
+     for x, y in list(record.items()):
+
         
         if (clients.get("data").__getitem__("clients").__contains__(x)):
             # log.debug("in clients")
@@ -770,9 +840,10 @@ def checktime():
             if (curtime > exp_time):
                 print("time expired {}".format(x))
                 # log.debug("time expired {}".format(x))
-
+                log.debug("Before removing from record -{}".format(record))
                 cs.CSClient().put("/control/hotspot/revoke",x)
                 record.pop(x)
+                log.debug("After removing from record -{}".format(record))
                 # windows_firewall()
                 # log.debug(" Firewall state is -{}".format(windows_firewallstate))
                 # if windows_firewallstate == "enabled":
@@ -781,9 +852,8 @@ def checktime():
                 print()
                 print("time available for {}".format(x))
                 # log.debug("time available for {}".format(x))
-
         else:
-            print()
+             print()
 
     except Exception as e:
         print("error occured")
@@ -792,17 +862,13 @@ def checktime():
 
 def revoke_unauthorized_client():
     global record
-    #log.debug(" Inside check for unauthorised clients")
-    #log.debug("record is {}".format(record))
+    print("record is {}".format(record))
     clients = cs.CSClient().get('/status/hotspot')
 
     json_value = json.dumps(clients, ensure_ascii=True, indent=4)
     json_lines = json_value.split(sep='\n')
 
     clientList=clients.get("data").__getitem__("clients")
-    log.debug(" Client List -{}".format(clientList))
-
-
     try:
         if(clientList.__len__() != record.__len__()):
             if (clientList.__len__() != 0):
