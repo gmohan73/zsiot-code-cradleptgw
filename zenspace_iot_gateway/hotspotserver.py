@@ -876,10 +876,28 @@ def revoke_unauthorized_client():
                 for x, y in clientList.items():
 
                     if record.__contains__(x):
-                        log.debug("{} connected through verification".format(x))
+                        log.debug("{} connected through verification Mac {}".format(x,y.get("mac")))
                     else:
                         log.debug(" {} hack".format(x))
                         cs.CSClient().put("/control/hotspot/revoke", x)
+                        try:
+
+                            dat = {"type": "INFO", "deviceType": "Hotspot", "name": "Hotspot server",
+                                   "message": {
+                                       "status": "Unauthorised Hotspot ipaddress {} Mac {} ".format(x,y.get("mac"))}}
+                            log.debug(dat)
+                            data = json.dumps(dat).encode("utf-8")
+                            req = urllib.request.Request(url + "/eventhub", headers=headers, data=data,
+                                                         method="PUT")
+                            resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
+
+                        except Exception as e:
+                            log.error("Exception raised on saving Hotspt logs{}".format(e))
+
+
+
+
+
 
     except Exception as e:
         print("error occured")

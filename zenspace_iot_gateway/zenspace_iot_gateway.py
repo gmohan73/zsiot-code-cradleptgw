@@ -93,6 +93,7 @@ externaltkt = "False"
 externalpingtkt = "False"
 internetdowntime = ''
 internalStatetkt = "False"
+pingresetflag = "enabled"
 
 pingresetcount = 0
 tmpState = ''
@@ -924,7 +925,7 @@ def on_subscribe(client, userdata, mid, granted_qos):
 #Get identity for the device from deviceslist dictionary.Then request is passed to the IOT gateway
 def on_message(client, userdata, msg):
     global iot_ip,cloudPodState,state,lockstate,cloudbeforePodState,beforePodState,intruderState,intrusionDetection
-    global podState,lightState,LOCK_TIMER,prePodState,reboot_state
+    global podState,lightState,LOCK_TIMER,prePodState,reboot_state,pingresetflag
     global DESIRED_TIMER,DEVICE_TIMER,GATEWAY_TIMER,POD_TIMER,SENSOR_TIMER,CONN_TIMER,CRITICAL
 
     log.info('Device received topic: {}, msg: {}'.format(msg.topic, str(msg.payload.decode("utf-8"))))
@@ -1006,7 +1007,20 @@ def on_message(client, userdata, msg):
                 if "ping_reset" in desired.keys():
                     pingreset_state = desired.get("ping_reset")
                     if pingreset_state.lower() == "yes":
+                        log.debug(" Ping reset flag = {}".format(pingresetflag))
+                        prevflag = pingresetflag
+                        pingresetflag = "enabled"
                         ping_reset()
+                        pingresetflag = prevflag
+                        log.debug(" Ping reset flag  after ping reset operation= {}".format(pingresetflag))
+
+                if "ping_resetflag" in desired.keys():
+                    flag = desired.get("ping_reset")
+                    if flag != None:
+                        pingresetflag = flag
+                        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                        "{\"ping_resetflag\":\"" + pingresetflag + "\"}",
+                                        qos=1)
                 if "notification" in desired.keys():
 
                     CRITICAL = desired.get("notification")
@@ -1199,7 +1213,21 @@ def on_message(client, userdata, msg):
                 data = y
                 if data != None :
                     if data.lower() == "yes":
+                        prevflag = pingresetflag
+                        log.debug(" Ping reset flag  before ping reset operation= {}".format(pingresetflag))
+                        pingresetflag = "enabled"
                         ping_reset()
+                        pingresetflag = prevflag
+                        log.debug(" Ping reset flag  after ping reset operation= {}".format(pingresetflag))
+            elif x == "ping_resetflag":
+                data = y
+                if data != None :
+                    pingresetflag = data
+                    mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                        "{\"ping_resetflag\":\"" + pingresetflag + "\"}",
+                                        qos=1)
+                    log.debug("Ping reset flag -{}".format(pingresetflag))
+
             elif x == "internal_reboot":
                 if y != None :
                     reboot_state = y
@@ -1432,9 +1460,10 @@ def gateway_status():
         mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + dt,
                             "{\"local_date\":\"" + str(currentdate) + "\"}",
                             qos=1)
-        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + dt,
-                            "{\"iotgw_version\":\"" + fwVersion + "\"}",
-                            qos=1)
+        if fwVersion != "":
+            mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + dt,
+                                "{\"iotgw_version\":\"" + fwVersion + "\"}",
+                                qos=1)
 
 
         fw_info = cs.CSClient().get('/status/fw_info').get("data")
@@ -2233,36 +2262,58 @@ def offline_online_check():
         log.error("Exception - offline online check {} ".format(e))
 
 
+def checkiot():
+    try:
+        time.sleep(1)
+        res = urllib.request.urlopen(url + iot_ip + '/time', timeout=URL_TIMEOUT)
+        respData = res.read()
+        resp = json.loads(respData)
+        gateway_time = resp.get("time").get("utcTimestamp")
+        timeStampState = check_timestamp(gateway_time)
+        log.debug(" Checkiot ........ Gateway time - {}".format(gateway_time))
+        if timeStampState == 0:
+            return "ok"
+        else:
+            return "notok"
+    except Exception as e:
+        log.debug(" Exception in checkiot -{}".format(e))
+        return "notok"
+
 def ping_reset():
-    global pingresetcount
+    global pingresetcount,pingresetflag,healthFlag
     log.debug(" Ping reset command issued")
+    result = ""
 
     while(True):
         log.debug(" Checking if health monitoring code is running - {}".format(healthFlag))
         if healthFlag != 1 :
-            #cs.CSClient().put("/control/ping/start/host", "")
-            #cs.CSClient().put("/control/ping/start/size", 96)
-            #cs.CSClient().put("/control/ping/start/num", 8)
-            pingresetcount = pingresetcount + 1
-            log.debug(" Ping reset count since bootup- {}".format(pingresetcount))
-            cs.CSClient().put("/control/ping/start", {"host": iot_ip, "size": 96, "num": 8, "timeout": 3})
-
-            #host = iot_ip
-            log.debug('Ping reset ping host: %s', iot_ip)
+            # Check to see if IOTGateway is reachable
+            result = checkiot()
+            log.debug(" Check iot flag -{}".format(result))
+            if result == "notok" and pingresetflag == "enabled":
+                pingresetcount = pingresetcount + 1
 
 
-            #time.sleep(9)
-            #r = cs.CSClient().put('control/ping/start/host', host)
 
-            #time.sleep(10)
-            result = cs.CSClient().get('control/ping')
-            log.debug("result is {}".format(result.get('data').get('status')))
+                log.debug(" Ping reset count since bootup- {}".format(pingresetcount))
+                cs.CSClient().put("/control/ping/start", {"host": iot_ip, "size": 96, "num": 8, "timeout": 3})
+                log.debug('Ping reset ping host: %s', iot_ip)
 
-            #cs.CSClient().put("/control/ping/start/host","")
-            #cs.CSClient().put("/control/ping/start/size",64)
-            #cs.CSClient().put("/control/ping/start/num",4)
-            cs.CSClient().put("/control/ping/start", {"host": "", "size": 64, "num": 4, "timeout": 3})
-            break;
+                data = {"type": "WARNING", "deviceType": "Cradlepoint", "name": "Iot Gateway",
+                        "message": {"status": "Ping reset performed - Count -{}".format(pingresetcount)}
+                        }
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                    json.dumps(data),
+                                    qos=1)
+
+                result = cs.CSClient().get('control/ping')
+                log.debug("result is {}".format(result.get('data').get('status')))
+
+                cs.CSClient().put("/control/ping/start", {"host": "", "size": 64, "num": 4, "timeout": 3})
+                break
+            else:
+                log.debug(" Skipping ping reset as the iot gateway is reachable")
+                break
         else:
             log.debug(" Waiting for Health Monitoring to end")
             time.sleep(2)
@@ -2312,14 +2363,14 @@ def health_monitoring():
                             if result.get('data') and result.get('data').get('status') in ["running"]:
                                 time.sleep(4)
                                 result = cstore.get('control/ping')
-                                if result.get('data') and result.get('data').get('status') in ["running"]:
-                                    t = 0
-                                    while (t < 10):
-                                        time.sleep(2)
-                                        result = cstore.get('control/ping')
-                                        if result.get('data') and result.get('data').get('status') in ["done", "error"]:
-                                            break
-                                        t = t + 1
+                                # if result.get('data') and result.get('data').get('status') in ["running"]:
+                                #     t = 0
+                                #     while (t < 10):
+                                #         time.sleep(2)
+                                #         result = cstore.get('control/ping')
+                                #         if result.get('data') and result.get('data').get('status') in ["done", "error"]:
+                                #             break
+                                #         t = t + 1
 
                             print("\n\n\t\t {}".format(result.get('data').get('status')))
                             if result.get('data') and result.get('data').get('status') in ["done"]:
@@ -2356,7 +2407,7 @@ def health_monitoring():
                                 unreachable_host.remove(host)
 
                         print("ping result:  FOR host {}  {}\n{}".format( host, error_str, result['data']['result']))
-                        time.sleep(4)
+                        time.sleep(1)
             else:
                 if "all" in unreachable_host:
 
@@ -2617,8 +2668,8 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
                 except Exception as e1:
                     log.debug(e1)
 
-                    if (str(e).__contains__("platform")):
-                        log.debug("Platform exception raised")
+                    if (str(e).__contains__("platform")or (str(e).__contains__("timed out"))):
+                        log.debug("Platform exception  or Timeout error raised")
                         log.debug("Reset iot gateway")
                         log.debug(" Issuing ping reset after waiting for 3 seconds and retyring once")
                         # Issue ping reset if exception is raised after sleep and retry
@@ -2697,7 +2748,7 @@ def sensor_check(iotGatewayState):
     sensors=[]
     print(  "\n\n\t\tsesnor Offline  {}".format(sensorOffline))
     ##door##
-    if iotGatewayState == "UNRECHABLE":
+    if iotGatewayState == "UNREACHABLE":
         availableDoor=0
     else:
         if "door_lock" in sensorOffline:
@@ -2766,6 +2817,8 @@ def sensor_check(iotGatewayState):
 
     except Exception as e:
         log.error("Exeption raised in light health check - {}".format(e))
+        lightSensor.update({"available": 0})
+        lightSensor.update({"total": totalD})
     sensors.append(lightSensor)
     print("\n\n\t sensors = {}".format(sensors))
     return sensors
@@ -3565,8 +3618,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(b'BAD Request')
                         log.debug(" 412 bad request {}".format(e))
-                        if (str(e).__contains__("platform")):
-                            log.debug("Platform exception raised")
+                        if (str(e).__contains__("platform") or (str(e).__contains__("timed out"))):
+                            log.debug("Platform exception raised or time out error")
                             setTimeout(2, ping_reset)
                             log.debug("Reset iot gateway")
                 else:
@@ -3994,66 +4047,71 @@ def verifyAuth(pin):
 
 
                         if (timeIn <= curtime and curtime <= timeOut):
-
+                            list = []
                             validverify = "valid"
                             if devicelist.__contains__("door_lock"):
                                 id = devicelist.__getitem__("door_lock")[0]
 
                                 # log.debug("door id is {}".format(d))
-                                time.sleep(1)
-                                response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
-                                dres = response.read()
-                                res = json.loads(dres)
-                                dstatus = res.get("deviceStatus")
+                                try:
 
-                                list = res.get("deviceStatus").get("list")
-                                currenttime = datetime.datetime.utcnow().replace(microsecond=0)
-                                for l in list:
-
-                                    dat = {"on":"false"}
-                                    # log.debug("data is {}".format(data))
-                                    data = json.dumps(dat).encode('utf-8')
                                     time.sleep(1)
-                                    req = urllib.request.Request(url + iot_ip + '/devices/' + id, headers=headers,
-                                                                 data=data,
-                                                                 method="PUT")
-                                    resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
-                                    if (resp.status == 200):
+                                    response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
+                                    dres = response.read()
+                                    res = json.loads(dres)
+                                    dstatus = res.get("deviceStatus")
 
-                                        global podState
+                                    list = res.get("deviceStatus").get("list")
+                                except Exception as e:
+                                    log.debug(" Exception reading status -{}".format(e))
+
+                                currenttime = datetime.datetime.utcnow().replace(microsecond=0)
+                                #for l in list:
+
+                                dat = {"on":"false"}
+                                # log.debug("data is {}".format(data))
+                                data = json.dumps(dat).encode('utf-8')
+                                time.sleep(1)
+                                req = urllib.request.Request(url + iot_ip + '/devices/' + id, headers=headers,
+                                                             data=data,
+                                                             method="PUT")
+                                resp = urllib.request.urlopen(req,timeout=URL_TIMEOUT)
+                                if (resp.status == 200):
+
+                                    global podState
+                                    prePodState = podState
+                                    if podState == "Admin In Use":
+                                        tmpState = "Reservation in Use"
+                                        #return 212
+
+                                    if podState == "Reservation In Use":
+                                        pass
+                                    else:
                                         prePodState = podState
-                                        if podState == "Admin In Use":
-                                            tmpState = "Reservation in Use"
-                                            #return 212
-
-                                        if podState == "Reservation In Use":
-                                            pass
+                                        podState = "Reservation In Use"
+                                        mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                                                            "{\"pod_state\":\"" + podState + "\"}",
+                                                            qos=1)
+                                        currentPin = pin
+                                        if curtime > timeOut:
+                                            print("crxtime is greater")
+                                            diff = curtime-timeOut
                                         else:
-                                            prePodState = podState
-                                            podState = "Reservation In Use"
-                                            mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
-                                                                "{\"pod_state\":\"" + podState + "\"}",
-                                                                qos=1)
-                                            currentPin = pin
-                                            if curtime > timeOut:
-                                                print("crxtime is greater")
-                                                diff = curtime-timeOut
-                                            else:
-                                                print("sensor rxtime is greater")
-                                                diff = timeOut-curtime
-                                            timeOutSeconds = diff.seconds - 60
-                                            setTimeout(timeOutSeconds, change_pod_state, "TimeOut")
+                                            print("sensor rxtime is greater")
+                                            diff = timeOut-curtime
+                                        timeOutSeconds = diff.seconds - 60
+                                        setTimeout(timeOutSeconds, change_pod_state, "TimeOut")
 
 
-                                        log.debug("login - lock state is {}".format(lockstate))
-                                        if lockstate == "enabled":
-                                            lock_door()
+                                    log.debug("login - lock state is {}".format(lockstate))
+                                    if lockstate == "enabled":
+                                        lock_door()
 
                                         # lockTime = curtime.second + LOCK_TIMER
                                         #
                                         # setTimeout(lockTime, lock_door)
                                         # sensor_status_publish()
-
+                                for l in list:
                                     currenttime = datetime.datetime.utcnow().replace(microsecond=0)
                                     lctimestamp = l.get("rxTime")
                                     lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
@@ -4095,12 +4153,14 @@ def verifyAuth(pin):
                                 #     log.debug("In else returning 2")
                                 #     return 2
                                # log.debug("gaeway response {}".format(resp))
+                                return 0
                             else:
 
                                 log.warning("door lock device id missing")
                                 if "door_lock" in sensorOffline:
                                     pass
                                 else:
+                                    sensorOffline.append("door_lock")
                                     data = {"type": CRITICAL, "deviceType": "sensor", "name": "door_lock",
                                             "message": {"status":"Either IOTgateway is not reachable / door_lock is not commisioned"}
                                             }
@@ -4124,43 +4184,48 @@ def verifyAuth(pin):
                             availableadminPins.update(i)
                         if pin in availableadminPins.keys():
                             if devicelist.__contains__("door_lock"):
-                                id = devicelist.__getitem__("door_lock")[0]
+                                try:
+                                    id = devicelist.__getitem__("door_lock")[0]
 
-                                # log.debug("door id is {}".format(d))
-                                time.sleep(1)
-                                response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
-                                dres = response.read()
-                                res = json.loads(dres)
-                                dstatus = res.get("deviceStatus")
+                                    # log.debug("door id is {}".format(d))
 
-                                list = res.get("deviceStatus").get("list")
-                                currenttime = datetime.datetime.utcnow().replace(microsecond=0)
-                                for l in list:
-                                    lctimestamp = l.get("rxTime")
-                                    lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
-                                    if currenttime > lctime:
-                                        print("crxtime is greater")
-                                        diff = currenttime - lctime
-                                    else:
-                                        print("sensor rxtime is greater")
-                                        diff = lctime - currenttime
+                                    time.sleep(1)
+                                    response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
+                                    dres = response.read()
+                                    res = json.loads(dres)
+                                    dstatus = res.get("deviceStatus")
+
+                                    list = res.get("deviceStatus").get("list")
 
 
-                                    diffsec = diff.seconds
-                                    if (diffsec < SENSOR_OFFLINE_TIMER):
-                                        pass
-                                    else:
-                                        log.warning("door lock sensor is unreachable")
-                                        data = {"type": CRITICAL, "deviceType": "sensor", "name": "door_lock",
-                                                "message": {"status":"sensor unreachable","Current_UTC": str(currenttime),"Sensor_UTC":str(lctime)}
-                                                }
-                                        # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                        #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
-                                        #                 qos=1)
-                                        mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                            json.dumps(data),
-                                                            qos=1)
+                                    currenttime = datetime.datetime.utcnow().replace(microsecond=0)
+                                    for l in list:
+                                        lctimestamp = l.get("rxTime")
+                                        lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
+                                        if currenttime > lctime:
+                                            print("crxtime is greater")
+                                            diff = currenttime - lctime
+                                        else:
+                                            print("sensor rxtime is greater")
+                                            diff = lctime - currenttime
 
+
+                                        diffsec = diff.seconds
+                                        if (diffsec < SENSOR_OFFLINE_TIMER):
+                                            pass
+                                        else:
+                                            log.warning("door lock sensor is unreachable")
+                                            data = {"type": CRITICAL, "deviceType": "sensor", "name": "door_lock",
+                                                    "message": {"status":"sensor unreachable","Current_UTC": str(currenttime),"Sensor_UTC":str(lctime)}
+                                                    }
+                                            # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                            #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
+                                            #                 qos=1)
+                                            mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                                                json.dumps(data),
+                                                                qos=1)
+                                except Exception as e:
+                                       log.debug(" Exception - {}".format(e))
                             else:
                                 log.warning("door lock id is missing")
                                 if "door_lock" in sensorOffline:
@@ -4175,7 +4240,8 @@ def verifyAuth(pin):
                                     #                 qos=1)
                                     mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                         json.dumps(data),
-                                                        qos=1)
+                                                         qos=1)
+
                             return 202
                         else:
 
@@ -4198,42 +4264,46 @@ def verifyAuth(pin):
                                 id = devicelist.__getitem__("door_lock")[0]
 
                                 # log.debug("door id is {}".format(d))
-                                time.sleep(1)
-                                response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
-                                dres = response.read()
-                                res = json.loads(dres)
-                                dstatus = res.get("deviceStatus")
+                                try:
+                                    time.sleep(1)
+                                    response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
+                                    dres = response.read()
+                                    res = json.loads(dres)
+                                    dstatus = res.get("deviceStatus")
 
-                                list = res.get("deviceStatus").get("list")
-                                currenttime = datetime.datetime.utcnow().replace(microsecond=0)
-                                for l in list:
-                                    lctimestamp = l.get("rxTime")
-                                    lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
-                                    if currenttime > lctime:
-                                        print("crxtime is greater")
-                                        diff = currenttime - lctime
-                                    else:
-                                        print("sensor rxtime is greater")
-                                        diff = lctime-currenttime
+                                    list = res.get("deviceStatus").get("list")
+                                    currenttime = datetime.datetime.utcnow().replace(microsecond=0)
+                                    for l in list:
+                                        lctimestamp = l.get("rxTime")
+                                        lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
+                                        if currenttime > lctime:
+                                            print("crxtime is greater")
+                                            diff = currenttime - lctime
+                                        else:
+                                            print("sensor rxtime is greater")
+                                            diff = lctime-currenttime
 
 
-                                    diffsec = diff.seconds
-                                    if (diffsec < SENSOR_OFFLINE_TIMER):
-                                        pass
-                                    else:
-                                        if "door_lock" in sensorOffline:
+                                        diffsec = diff.seconds
+                                        if (diffsec < SENSOR_OFFLINE_TIMER):
                                             pass
                                         else:
-                                            sensorOffline.append("door_lock")
-                                            data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
-                                                    "message": {"status":"sensor unreachable","Current_UTC":str(currenttime) ,"Sensor_UTC":str(lctime)}
-                                                    }
-                                            # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                            #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
-                                            #                 qos=1)
-                                            mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                                json.dumps(data),
-                                                                qos=1)
+                                            if "door_lock" in sensorOffline:
+                                                pass
+                                            else:
+                                                sensorOffline.append("door_lock")
+                                                data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
+                                                        "message": {"status":"sensor unreachable","Current_UTC":str(currenttime) ,"Sensor_UTC":str(lctime)}
+                                                        }
+                                                # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                                #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
+                                                #                 qos=1)
+                                                mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                                                    json.dumps(data),
+                                                                    qos=1)
+                                except Exception as e:
+                                     log.debug("Exception -{}".format(e))
+
 
                             else:
                                 if "door_lock" in sensorOffline:
@@ -4271,34 +4341,38 @@ def verifyAuth(pin):
                           id = devicelist.__getitem__("door_lock")[0]
 
                           # log.debug("door id is {}".format(d))
-                          time.sleep(1)
-                          response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
-                          dres = response.read()
-                          res = json.loads(dres)
-                          dstatus = res.get("deviceStatus")
+                          try:
+                              time.sleep(1)
+                              response = urllib.request.urlopen(url + iot_ip + '/devices/status/' + id,timeout=URL_TIMEOUT)
+                              dres = response.read()
+                              res = json.loads(dres)
+                              dstatus = res.get("deviceStatus")
 
-                          list = res.get("deviceStatus").get("list")
-                          currenttime = datetime.datetime.utcnow().replace(microsecond=0)
-                          for l in list:
-                              lctimestamp = l.get("rxTime")
-                              lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
-                              if currenttime > lctime:
-                                diff = currenttime - lctime
-                              else:
-                                  diff = lctime - currenttime
-                              diffsec = diff.seconds
-                              if (diffsec < SENSOR_OFFLINE_TIMER):
-                                  pass
-                              else:
-                                  data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
-                                          "message": {"status":"sensor unreachable","Current_UTC": str(currenttime),"Sensor_UTC":str(lctime)}
-                                          }
-                                  # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                  #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
-                                  #                 qos=1)
-                                  mqtt_client.publish('devices/' + pod_id + '/messages/events/',
-                                                      json.dumps(data),
-                                                      qos=1)
+                              list = res.get("deviceStatus").get("list")
+                              currenttime = datetime.datetime.utcnow().replace(microsecond=0)
+                              for l in list:
+                                  lctimestamp = l.get("rxTime")
+                                  lctime = datetime.datetime.utcfromtimestamp(lctimestamp)
+                                  if currenttime > lctime:
+                                    diff = currenttime - lctime
+                                  else:
+                                      diff = lctime - currenttime
+                                  diffsec = diff.seconds
+                                  if (diffsec < SENSOR_OFFLINE_TIMER):
+                                      pass
+                                  else:
+                                      data = {"type": "WARNING", "deviceType": "sensor", "name": "door_lock",
+                                              "message": {"status":"sensor unreachable","Current_UTC": str(currenttime),"Sensor_UTC":str(lctime)}
+                                              }
+                                      # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                      #                 "{\"door_lock_alert\": \"sensor unreachable ,Current_UTC: {} , Sensor_UTC: {}\" }".format(currenttime,lctime),
+                                      #                 qos=1)
+                                      mqtt_client.publish('devices/' + pod_id + '/messages/events/',
+                                                          json.dumps(data),
+                                                          qos=1)
+                          except Exception as e:
+                              log.debug("Exception -{}".format(e))
+
 
                       else:
                           if "door_lock" in sensorOffline:
@@ -4322,8 +4396,9 @@ def verifyAuth(pin):
                 else:
                      return getAuthentications(pin, totalpincount)
     except Exception as e:
-        log.error("Exception - verifyAuth -{}".format(e))
-        if (str(e).__contains__("platform")):
+        errstr = e
+        log.error("Exception - verifyAuth -{}".format(errstr))
+        if (str(e).__contains__("platform")or (str(e).__contains__("timed out"))):
             log.debug("Platform exception raised")
             setTimeout(2, ping_reset)
             log.debug("Reset iot gateway")
@@ -4656,7 +4731,7 @@ try:
     try:
         set_state_color()
         get_islock_state()
-        health_monitoring()
+        #health_monitoring()
         # network_stats()
         gateway_status()
         # print(sensor_check())
