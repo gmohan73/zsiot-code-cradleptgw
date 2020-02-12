@@ -30,7 +30,7 @@ POD_TIMER = 60
 SENSOR_TIMER = 60
 DEVICE_TIMER = 350
 CONN_TIMER = 12000
-REBOOT_TIMER = 90
+REBOOT_TIMER = 300
 
 DESIRED_TIMER = 10
 HEALTH_TIMER = 1800
@@ -157,7 +157,8 @@ pod_id = "Unknown"
 pod_key = "Unknown"
 #ports=settings.PORTS
 reboot_count = 0
-reboot_state = "disabledinuse"
+#reboot_state = "disabledinuse"
+reboot_state = "disabled"
 
 
 # MS Azure IoT Hub name
@@ -432,9 +433,17 @@ def delete_pinauth():
     except Exception as e:
         log.debug(" exception was raised while trying to delete pin auth-{}".format(e))
 
+def checkinternetstatus():
+    try:
+        localdate = datetime.datetime.now().date()
+        res = urllib.request.urlopen(logicUrl + pod_id + "/?localdate=" + str(localdate), timeout=URL_TIMEOUT)
+        return "True"
+    except Exception as e:
+        log.debug( "Exception trying to read logicl pod name -{}".format(e))
+        return "False"
 def internal_reboot():
 
-    global reboot_count,podState,reboottime,reboot_state,healthFlag,internetdowntime
+    global reboot_count,podState,reboottime,reboot_state,healthFlag,internetdowntime,prePodState
     try:
         count = 0
         mainserver = "True"
@@ -443,13 +452,19 @@ def internal_reboot():
 
         can_reboot = "False"
         #log.debug(" Reboot state - {} HealthFlag - {}".format(reboot_state,healthFlag))
-        if reboot_state == "enabled" and healthFlag == 0:
+        log.debug("Can reboot flag -{}".format(can_reboot))
+        if reboot_state == "enabled" :
             can_reboot="True"
         elif reboot_state == "disabledinuse":
             # Should not reboot in Reserved state 'cos if pin was saved in RAM and then internet connection was lost then rebooting will erase pin details from Cradlepoint
-            if (podState == "Available" or podState == "Unknown")and healthFlag == 0 :
+            log.debug(" Prev pod state -{} can reboot flag{}".format(prePodState,can_reboot))
+            if (podState == "Available" or podState == "Unknown" or podState == "Reserved"):
+
                 can_reboot= "True"
-        log.debug("Pod state {} and reboot state {}".format(podState,reboot_state))
+            elif ((podState == "Reserved in Next 10 min"  or podState == "Available in Next 10 min ") and (prePodState == "Available" or prePodState == "Reserved" )):
+                 can_reboot = "True"
+
+        log.debug("Pod state {} and reboot state {} can reboot flag -{}".format(podState,reboot_state,can_reboot))
         if can_reboot == "True":
              #log.debug(" Starting checks for rebooting........")
             # Check if 9001 server is reachable,repeat check for 3 times with a gap of 3 seconds before declaring server unreachable
@@ -475,26 +490,41 @@ def internal_reboot():
                     count = count + 1
 
 
-             r = cs.CSClient().put('control/ping/start/host', "8.8.8.8")
-
-             time.sleep(3)
-             result = cs.CSClient().get('control/ping')
-             #log.debug("result is {}".format(result.get('data').get('status')))
-             if result.get('data').get('status') in ["running"]:
-                time.sleep(3)
-                result = cs.CSClient().get('control/ping')
+             # r = cs.CSClient().put('control/ping/start/host', "8.8.8.8")
+             #
+             # time.sleep(3)
+             # result = cs.CSClient().get('control/ping')
+             # #log.debug("result is {}".format(result.get('data').get('status')))
+             # if result.get('data').get('status') in ["running"]:
+             #    time.sleep(3)
+             #    result = cs.CSClient().get('control/ping')
                 #log.debug("Second time result is {}".format(result.get('data').get('status')))
-             if result.get('data') and result.get('data').get('status') in ["error","running"]:
+             internet = checkinternetstatus()
+             if internet == "False":
                  # Rebooting on loss of internet will result in losing all pin details
-                internet = "False"
+
                 if internetdowntime == '':
                     internetdowntime = datetime.datetime.utcnow().replace(microsecond=0)
 
              else :
                 internetdowntime =  ''
 
-             log.debug(" Internet status- {}".format(internet))
 
+             log.debug(" Internet status- {}".format(internet))
+             log.debug(" Time when internet connection was lost -{}".format(internetdowntime))
+
+             # Should delete reservation details if internet is not present continuously for 5 mins
+             if internet == "False":
+                 ctime = datetime.datetime.utcnow().replace(microsecond=0)
+                 dtime = ctime - internetdowntime
+
+                 log.debug("Difference between current time and time when internet connection was lost-{} ".format(
+                     dtime.seconds))
+                 if int(dtime.seconds) > INTERNETDOWN:
+
+                     delete_pinauth()
+                 else:
+                     internet = ""
              #log.debug("reboot count {}".format(reboot_count))
              hub = cs.CSClient().get('/config/system/asset_id')
              hublist = hub.get("data").split("#")
@@ -504,17 +534,7 @@ def internal_reboot():
                     reboottime = hub.get("data").split("#")[2]
 
              log.debug("reboot count {}, reboottime = {}".format(reboot_count,reboottime))
-             # Should reboot only if internet has been down for more than 30 minutes
-             if internet == "False":
-                 ctime = datetime.datetime.utcnow().replace(microsecond=0)
-                 dtime = ctime - internetdowntime
-                 log.debug(" Time when internet connection was lost -{}".format(internetdowntime))
-                 log.debug("Difference between current time and time when internet connection was lost-{} ".format(dtime.seconds))
-                 if int(dtime.seconds) > INTERNETDOWN:
-                     internet = "False"
-                     delete_pinauth()
-                 else:
-                     internet = ""
+
 
              #if mainserver == "False" or hotspotserver == "False" or internet == "False":
              if mainserver == "False" or hotspotserver == "False":
@@ -2321,9 +2341,12 @@ def ping_reset():
 
 def health_monitoring():
     global unreachable_host,healthFlag
+
     if healthFlag == 1:
         pass
     else:
+
+
         log.debug(" Inside health monitoring")
         healthFlag = 1
         iotHost=internalHost=unlockHost="0.0.0.0"

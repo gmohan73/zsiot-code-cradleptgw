@@ -83,7 +83,7 @@ def start_server():
 # def code_verify():
     # try:
     #     dat = {"type": "INFO", "deviceType": "cradlepoint", "name": "Hotspot",
-    #            "message": {"status": "Hotspot integrated code installed"}}
+    #            "message": {"status": "Hotspot integrated code installed "}}
     #     data = json.dumps(dat).encode("utf-8")
     #     req = urllib.request.Request(url + "/eventhub", headers=headers, data=data, method="PUT")
     #     resp = urllib.request.urlopen(req, timeout=URL_TIMEOUT)
