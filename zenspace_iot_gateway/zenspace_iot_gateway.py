@@ -94,6 +94,8 @@ externalpingtkt = "False"
 internetdowntime = ''
 internalStatetkt = "False"
 pingresetflag = "enabled"
+analyzever = ""
+walpaperver=""
 
 pingresetcount = 0
 tmpState = ''
@@ -1035,7 +1037,7 @@ def on_message(client, userdata, msg):
                         log.debug(" Ping reset flag  after ping reset operation= {}".format(pingresetflag))
 
                 if "ping_resetflag" in desired.keys():
-                    flag = desired.get("ping_reset")
+                    flag = desired.get("ping_resetflag")
                     if flag != None:
                         pingresetflag = flag
                         mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
@@ -2030,7 +2032,7 @@ def sensor_status_publish():
                 data = {"type": "INFO", "deviceType": "sensor", "name":i ,
                     "message": j
                     }
-                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode("utf-8"), qos=2)
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data).encode("utf-8"), qos=0)
             # mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(devicestatus), qos=2)
         for (i, j), (k, l),(m,n) in zip(devicestatuswithoutrx.items(), devicestatustemp.items(),devicestatus.items()):
             if devicestatuswithoutrx.get(i) == devicestatustemp.get(i):
@@ -2072,7 +2074,8 @@ def sensor_status_publish():
                                 if diffbat > 5:
 
 
-                                    mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
+                                    #mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
+                                    mqtt_client.publish('devices/' + pod_id + '/messages/events/',  json.dumps(dat).encode("utf-8"), qos=0)
                         if jtemp != "" and ltemp !="" and jtemp != None and ltemp !=None and jtemp != " " and ltemp != " ":
                             if int(jtemp.split('.')[0]) > int(ltemp.split('.')[0]):
                                 difftemp=int(jtemp.split('.')[0]) - int(ltemp.split('.')[0])
@@ -2082,12 +2085,14 @@ def sensor_status_publish():
                             if difftemp <= 1:
                                 pass
                             else:
-                                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
+                                #mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
+                                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=0)
 
                             if jwithoutBat == lwithoutBat:
                                 pass
                             else:
-                                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
+                                #mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=1)
+                                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(dat).encode("utf-8"), qos=0)
                     except Exception as e:
                         log.error("Exception raised in sensor_status_publish motion sensor - {}".format(e))
 
@@ -2098,7 +2103,8 @@ def sensor_status_publish():
                     # log.debug("k is {} ,l is {}".format(k,l))
                     # log.debug("m is {} , n is {}".format(m,n))
                     # dat={i:j}
-                    mqtt_client.publish('devices/' + pod_id + '/messages/events/?rid=2300', json.dumps(dat).encode("utf-8"), qos=1)
+                    #mqtt_client.publish('devices/' + pod_id + '/messages/events/?rid=2300', json.dumps(dat).encode("utf-8"), qos=1)
+                    mqtt_client.publish('devices/' + pod_id + '/messages/events/?rid=2300', json.dumps(dat).encode("utf-8"), qos=0)
 
                     print("\t\t\t\tdevice status{}".format(devicestatus))
 
@@ -2480,17 +2486,28 @@ def check_timestamp(gatewayTime):
 
 def app_healthcheck(iotHost,unlockHost,internalHost):
     global unlockKeepAlive,unlockKeepAliveTimer,unreachable_host,podState,zenspaceKeepAlive,zenspaceKeepAliveTimer,cameraKeepAlive,cameraKeepAliveTimer
-    global teamViewerState,airServerState,externaltkt,externalpingtkt,internalStatetkt,gatewayTicket,cameraavlState
+    global teamViewerState,airServerState,externaltkt,externalpingtkt,internalStatetkt,gatewayTicket,cameraavlState,analyzever,walpaperver
     conn_type=""
 
     try:
+        grid = "2342"
         conn_type = cs.CSClient().get("/status/wan/primary_device").get("data")
 
         mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                             "{\"conn_type\":\"" + conn_type + "\"}", qos=0)
 
+        grid = "2345"
+        if analyzever != "":
+            mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                            "{\"analyze_version\":\"" + analyzever + "\"}", qos=0)
+
+        grid = "2346"
+        if walpaperver != "":
+            mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
+                        "{\"walpaper_version\":\"" + walpaperver+ "\"}", qos=0)
+
     except Exception as e:
-        log.error("Exception raised in conn_type {}".format(e))
+        log.error("Exception raised in publishing reported property {}".format(e))
     sensorList=[]
 
 
@@ -2762,7 +2779,8 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
         sensor=sensor_check(iotGatewayState)
 
         data={"type":"INFO","deviceType":"MONITOR","name":"monitor","message":{"connType":conn_type,"iotGateway":iotGatewayState,"external":externalState,"internal":internalState,"teamviewer":tstate,"airserver":astate,"camera":cstate,"sensors":sensor}}
-        mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(data),qos=1)
+        #mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(data),qos=1)
+        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=0)
     except Exception as e:
         log.error("Exception raises in app_healthcheck - {}".format(e))
 
@@ -3165,7 +3183,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
 
     def do_PUT(self):
-        global teamViewerState,zenspaceState,cameraKeepAlive,airServerState,cameraavlState
+        global teamViewerState,zenspaceState,cameraKeepAlive,airServerState,cameraavlState,analyzever,walpaperver
         log.debug("PUT request")
         erid="2000"
         if None != re.search('/eventhub', self.path):
@@ -3220,8 +3238,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                         if "airserver" in data.keys():
                             airServerState=data.get("airserver")
                         if "camerapresent" in data.keys():
-                                cameraavlState = data.get("camerapresent")
+                            cameraavlState = data.get("camerapresent")
+                        if "analyze_image_ver" in data.keys():
+                            analyzever = data.get("analyze_image_ver")
 
+                        if "walpaperchange_ver" in data.keys():
+                            walpaperver = data.get("walpaperchange_ver")
 
                         self.send_response(200)
                         self.end_headers()
