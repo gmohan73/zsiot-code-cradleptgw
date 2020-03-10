@@ -522,7 +522,7 @@ def internal_reboot():
 
                  log.debug("Difference between current time and time when internet connection was lost-{} ".format(
                      dtime.seconds))
-                 if int(dtime.seconds) > INTERNETDOWN:
+                 if int(dtime.seconds) >= INTERNETDOWN:
 
                      delete_pinauth()
                  else:
@@ -1031,7 +1031,8 @@ def on_message(client, userdata, msg):
                     if pingreset_state.lower() == "yes":
                         log.debug(" Ping reset flag = {}".format(pingresetflag))
                         prevflag = pingresetflag
-                        pingresetflag = "enabled"
+                        pingresetflag = "forced"
+
                         ping_reset()
                         pingresetflag = prevflag
                         log.debug(" Ping reset flag  after ping reset operation= {}".format(pingresetflag))
@@ -1237,7 +1238,7 @@ def on_message(client, userdata, msg):
                     if data.lower() == "yes":
                         prevflag = pingresetflag
                         log.debug(" Ping reset flag  before ping reset operation= {}".format(pingresetflag))
-                        pingresetflag = "enabled"
+                        pingresetflag = "forced"
                         ping_reset()
                         pingresetflag = prevflag
                         log.debug(" Ping reset flag  after ping reset operation= {}".format(pingresetflag))
@@ -1592,8 +1593,8 @@ def single_sensor_status(sensor_id):
                     pass
                 else:
                     mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + srid,
-                                        str(rep_prop), qos=1)
-                    mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(rep_prop), qos=1)
+                                        str(rep_prop), qos=0)
+                    mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(rep_prop), qos=0)
 
     except Exception as e:
         log.error("Exception in single sensor status - {}".format(e))
@@ -1776,7 +1777,7 @@ def sensor_status_check_only(startIndex):
                                                }
                                        print(data)
                                        # data={nameAlert: "sensor unreachable : Current_UTC: {} , Sensor_UTC: {}".format(current_rxtime,sensor_rxtime)}
-                                       mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
+                                       mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=0)
                            else:
 
                                if name in sensorOffline:
@@ -1957,7 +1958,7 @@ def sensor_status(startIndex):
                                                     }
                                        print(data)
                                        # data={nameAlert: "sensor unreachable : Current_UTC: {} , Sensor_UTC: {}".format(current_rxtime,sensor_rxtime)}
-                                       mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
+                                       mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=0)
                            else:
 
                                if name in sensorOffline:
@@ -2316,26 +2317,29 @@ def ping_reset():
             # Check to see if IOTGateway is reachable
             result = checkiot()
             log.debug(" Check iot flag -{}".format(result))
-            if result == "notok" and pingresetflag == "enabled":
+            if (result == "notok" and pingresetflag == "enabled") or pingresetflag == "forced":
                 pingresetcount = pingresetcount + 1
 
 
 
                 log.debug(" Ping reset count since bootup- {}".format(pingresetcount))
                 cs.CSClient().put("/control/ping/start", {"host": iot_ip, "size": 96, "num": 8, "timeout": 3})
+                result = cs.CSClient().get('control/ping')
                 log.debug('Ping reset ping host: %s', iot_ip)
+                log.debug("result is {}".format(result.get('data').get('status')))
+
 
                 data = {"type": "WARNING", "deviceType": "Cradlepoint", "name": "Iot Gateway",
                         "message": {"status": "Ping reset performed - Count -{}".format(pingresetcount)}
                         }
                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                     json.dumps(data),
-                                    qos=1)
+                                    qos=0)
 
                 result = cs.CSClient().get('control/ping')
                 log.debug("result is {}".format(result.get('data').get('status')))
-
-                cs.CSClient().put("/control/ping/start", {"host": "", "size": 64, "num": 4, "timeout": 3})
+                #time.sleep(3)
+               # cs.CSClient().put("/control/ping/start", {"host": "", "size": 64, "num": 4, "timeout": 3})
                 break
             else:
                 log.debug(" Skipping ping reset as the iot gateway is reachable")
@@ -2383,7 +2387,8 @@ def health_monitoring():
 
 
                         while try_count < 3:
-                            r=cstore.put('control/ping/start/host', host)
+                            r=cs.CSClient().put("/control/ping/start", {"host": host, "size": 64, "num": 4, "timeout": 3})
+                            #r=cstore.put('control/ping/start/host', host)
 
                             time.sleep(5)
                             result = cstore.get('control/ping')
@@ -2428,7 +2433,7 @@ def health_monitoring():
                                             }
                                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                                                     json.dumps(data),
-                                                                                    qos=1)
+                                                                                    qos=0)
 
 
                         if result.get('data').get('status') == "done":
@@ -2447,7 +2452,7 @@ def health_monitoring():
                     data = {"type": CRITICAL, "deviceType": "Zenspace devices", "name":"All devices" ,
                             "message": {"status":"No device found"}
                             }
-                    mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(data),qos=1)
+                    mqtt_client.publish('devices/' + pod_id + '/messages/events/',json.dumps(data),qos=0)
 
             log.debug(" UnReachable host - {}".format(unreachable_host))
             app_healthcheck(iotHost, unlockHost, internalHost)
@@ -2480,7 +2485,7 @@ def check_timestamp(gatewayTime):
             data = {"type": CRITICAL, "deviceType": "IOT gateway", "name": "IOT gateway",
                     "message": {"status": "{}".format(e)}
                     }
-            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
+            mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=0)
         return 1
 
 
@@ -2565,7 +2570,7 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
                             }
                     mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                         json.dumps(data),
-                                        qos=1)
+                                        qos=0)
                     externaltkt = "True"
                 elif externalState == "PING" and externalpingtkt != "True":
                     log.debug("Value of notification flag is -{}".format(CRITICAL))
@@ -2574,7 +2579,7 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
                             }
                     mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                         json.dumps(data),
-                                        qos=1)
+                                        qos=0)
 
                     externalpingtkt= "True"
 
@@ -2664,7 +2669,7 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
 
             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                 json.dumps(data),
-                                qos=1)
+                                qos=0)
             internalStatetkt = "True"
 
 
@@ -2734,7 +2739,7 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
 
                         mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                 json.dumps(data),
-                                                qos=1)
+                                                qos=0)
             else:
                 if iotserver == "ok":
                     iotGatewayState = "REACHABLE"
@@ -2750,7 +2755,7 @@ def app_healthcheck(iotHost,unlockHost,internalHost):
                         data = {"type": CRITICAL, "deviceType": "IOT gateway", "name": "IOT gateway",
                                 "message": {"status": "Unable to reach Iot Gateway HTTP server"}
                                 }
-                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
+                        mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=0)
 
         if cameraavlState.lower() == "true":
             cstate = "INSTALLED"
@@ -2918,7 +2923,7 @@ def lock_door():
                         #                 qos=1)
                         mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                             json.dumps(data),
-                                            qos=1)
+                                            qos=0)
 
         else:
             log.warning("door lock id is missing")
@@ -2932,7 +2937,7 @@ def lock_door():
 
                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                 json.dumps(data),
-                                qos=1)
+                                qos=0)
 
             # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
             #                     "{\"door_lock_alert\": \"sensor missing \" }",
@@ -2945,7 +2950,7 @@ def lock_door():
 
         mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                             json.dumps(data),
-                            qos=1)
+                            qos=0)
 
 def unlock_door():
     try:
@@ -3001,7 +3006,7 @@ def unlock_door():
                         #                 qos=1)
                         mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                             json.dumps(data),
-                                            qos=1)
+                                            qos=0)
 
         else:
             log.warning("door lock id is missing")
@@ -3015,11 +3020,11 @@ def unlock_door():
 
                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                     json.dumps(data),
-                                    qos=1)
+                                    qos=0)
 
             # mqtt_client.publish('devices/' + pod_id + '/messages/events/',
             #                     "{\"door_lock_alert\": \"sensor missing \" }",
-            #                     qos=1)
+            #                     qos=0)
     except Exception as e:
        # log.error("Exception - unlocking the door -- {}".format(e))
         err= "Exception - unlocking the door -- {}".format(e)
@@ -3029,7 +3034,7 @@ def unlock_door():
 
         mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                             json.dumps(data),
-                            qos=1)
+                            qos=0)
 
 #IPadServer
 def start_server():
@@ -3328,6 +3333,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                            log.debug("Reservation user loging in when state is {}".format(podState))
                                            pass
                                        else :
+                                           log.debug(" Before calling update pod state {}".format(podState))
                                            update_pod_state()
 
                                            # sensor_status(0)
@@ -3408,7 +3414,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     data={"type": "INFO", "deviceType": "Unlock", "name": "Reservation Login","message": d}
                 # pindata = {"Reservation Login": {"pin": pin, "response": res, "podState": podState}}
                 # mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(pindata), qos=1)
-                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=0)
 
         elif None != re.search('/adminHotspotLogin',self.path):
             log.debug("/adminHotspotLogin post request")
@@ -3687,7 +3693,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 else:
                     data = {"type": "INFO", "deviceType": "Unlock", "name": "Admin Login", "message":pindata
                         }
-                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=1)
+                mqtt_client.publish('devices/' + pod_id + '/messages/events/', json.dumps(data), qos=0)
 
         elif None != re.search('/pod/state',self.path):
             try:
@@ -3773,7 +3779,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                                             #                     qos=1)
                                             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                                 json.dumps(mdata),
-                                                                qos=1)
+                                                                qos=0)
                                     elif hval == "no":
                                         if "intruder" in intrusion:
                                             intrusion.remove("intruder")
@@ -4133,10 +4139,12 @@ def verifyAuth(pin):
                                         pass
                                     else:
                                         prePodState = podState
+                                        log.debug(" Pod state is {}".format(podState))
                                         podState = "Reservation In Use"
                                         mqtt_client.publish('$iothub/twin/PATCH/properties/reported/?rid=' + grid,
                                                             "{\"pod_state\":\"" + podState + "\"}",
                                                             qos=1)
+                                        log.debug(" Pod state after publish is {}".format(podState))
                                         currentPin = pin
                                         if curtime > timeOut:
                                             print("crxtime is greater")
@@ -4186,7 +4194,7 @@ def verifyAuth(pin):
                                             #                 qos=1)
                                             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                                 json.dumps(data),
-                                                                qos=1)
+                                                                qos=0)
 
                                         log.debug("In else returning 0")
                                         # return 20
@@ -4214,9 +4222,9 @@ def verifyAuth(pin):
                                     #                 qos=1)
                                     mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                         json.dumps(data),
-                                                        qos=1)
-                                # return 20
-                                return 0
+                                                        qos=0)
+                                return 20
+                                #return 0
                         else:
                               log.warning("valid verify invalid")
                               validverify = "invalid"
@@ -4268,7 +4276,7 @@ def verifyAuth(pin):
                                             #                 qos=1)
                                             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                                 json.dumps(data),
-                                                                qos=1)
+                                                                qos=0)
                                 except Exception as e:
                                        log.debug(" Exception - {}".format(e))
                             else:
@@ -4285,7 +4293,7 @@ def verifyAuth(pin):
                                     #                 qos=1)
                                     mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                         json.dumps(data),
-                                                         qos=1)
+                                                         qos=0)
 
                             return 202
                         else:
@@ -4345,7 +4353,7 @@ def verifyAuth(pin):
                                                 #                 qos=1)
                                                 mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                                     json.dumps(data),
-                                                                    qos=1)
+                                                                    qos=0)
                                 except Exception as e:
                                      log.debug("Exception -{}".format(e))
 
@@ -4363,7 +4371,7 @@ def verifyAuth(pin):
                                     #                 qos=1)
                                     mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                         json.dumps(data),
-                                                        qos=1)
+                                                        qos=0)
                             return 202
                         else:
                             log.debug("Accessing pin is not present")
@@ -4414,7 +4422,7 @@ def verifyAuth(pin):
                                       #                 qos=1)
                                       mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                           json.dumps(data),
-                                                          qos=1)
+                                                          qos=0)
                           except Exception as e:
                               log.debug("Exception -{}".format(e))
 
@@ -4432,7 +4440,7 @@ def verifyAuth(pin):
                               #                 qos=1)
                               mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                                                   json.dumps(data),
-                                                  qos=1)
+                                                  qos=0)
                       return 202
                   else:
 
@@ -4621,7 +4629,7 @@ def get_desired():
 
             mqtt_client.publish('devices/' + pod_id + '/messages/events/',
                             json.dumps(data),
-                            qos=1)
+                            qos=0)
             ppOnlineTime=datetime.datetime.utcnow().replace(microsecond=0)
 
         # mqtt_client.publish('devices/' + pod_id + '/messages/events/', "{\"ZenServer\":\"zenspace back to online\"}",
